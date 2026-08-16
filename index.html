@@ -132,7 +132,7 @@
 <script src="https://accounts.google.com/gsi/client"></script>
 
 <script>
-const TYPES = ["apéritif","entrée","plat","dessert","soupe","sauce","technique","autre"];
+const TYPES = ["apéritif","entrée","plat","dessert","soupe","sauce","boisson","technique","autre"];
 const CATEGORIES = [
   { key: "tous", label: "Toutes les recettes" },
   { key: "apéritif", label: "Apéritif" },
@@ -141,6 +141,7 @@ const CATEGORIES = [
   { key: "dessert", label: "Dessert" },
   { key: "soupe", label: "Soupe" },
   { key: "sauce", label: "Sauce" },
+  { key: "boisson", label: "Boisson" },
   { key: "technique", label: "Techniques" }
 ];
 let currentCategory = "tous";
@@ -638,25 +639,17 @@ function setRating(starIndex, fraction){
   render();
 }
 
-const PORTIONS_PRESETS = ["1 personne","2 personnes","3 personnes","4 personnes"];
+const PORTIONS_PRESETS = Array.from({length: 20}, (_, i) => (i + 1) + (i === 0 ? ' personne' : ' personnes'));
 const DURATION_PRESETS = ["5 min","10 min","15 min","20 min","30 min","45 min",
   "1 h","1 h 15","1 h 30","1 h 45","2 h","2 h 30","3 h","3 h 30","4 h"];
 
 function renderPortionsField(current){
-  const isPreset = PORTIONS_PRESETS.includes(current);
   const opts = PORTIONS_PRESETS.map(p => `<option value="${p}" ${current===p?'selected':''}>${p}</option>`).join('');
   return `
-    <div style="display:flex;align-items:center;gap:8px">
-      <select onchange="onPortionsChange(this.value)">
-        <option value="" ${!current?'selected':''}>—</option>
-        ${opts}
-        <option value="__autre__" ${(current && !isPreset)?'selected':''}>Autre...</option>
-      </select>
-      <input type="text" id="portionsCustom" placeholder="ex: 6 personnes"
-        value="${escapeHtml((current && !isPreset) ? current : '')}"
-        style="display:${(current && !isPreset)?'inline-block':'none'};max-width:130px;width:auto;border:1px solid var(--lightgray);background:var(--white);text-align:left;border-radius:8px;padding:6px 10px"
-        onblur="applyPortionsChange(this.value)">
-    </div>`;
+    <select onchange="applyPortionsChange(this.value)">
+      <option value="" ${!current?'selected':''}>—</option>
+      ${opts}
+    </select>`;
 }
 function extractPersonCount(text){
   const m = /\d+/.exec(text||'');
@@ -697,16 +690,6 @@ function applyPortionsChange(newVal){
   }
   window.__draft.portions = newVal;
   render();
-}
-function onPortionsChange(val){
-  const custom = document.getElementById('portionsCustom');
-  if(val === '__autre__'){
-    custom.style.display = 'inline-block';
-    custom.focus();
-    return;
-  }
-  custom.style.display = 'none';
-  applyPortionsChange(val);
 }
 
 function renderDurationField(field, current){
