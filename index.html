@@ -132,7 +132,7 @@
 <script src="https://accounts.google.com/gsi/client"></script>
 
 <script>
-const TYPES = ["apéritif","entrée","plat","dessert","soupe","sauce","boisson","technique","autre"];
+const TYPES = ["apéritif","entrée","plat","dessert","soupe","sauce","boisson","magimix","technique","autre"];
 const CATEGORIES = [
   { key: "tous", label: "Toutes les recettes" },
   { key: "apéritif", label: "Apéritif" },
@@ -142,6 +142,7 @@ const CATEGORIES = [
   { key: "soupe", label: "Soupe" },
   { key: "sauce", label: "Sauce" },
   { key: "boisson", label: "Boisson" },
+  { key: "magimix", label: "Magimix" },
   { key: "technique", label: "Techniques" }
 ];
 let currentCategory = "tous";
@@ -1221,7 +1222,8 @@ async function extractEpubCandidates(file){
     try{
       const html = await entry.async('string');
       const h = /<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i.exec(html);
-      const heading = h ? stripHtmlToText(h[1]).trim() : '';
+      const titleTag = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+      const heading = (h ? stripHtmlToText(h[1]).trim() : '') || (titleTag ? titleTag[1].trim() : '');
       const body = stripHtmlToText(html);
       const combined = heading ? ('# ' + heading + '\n\n' + body) : body;
       const rec = parseMarkdownRecipe(name, combined);
