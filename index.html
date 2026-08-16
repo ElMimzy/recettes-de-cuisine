@@ -140,6 +140,17 @@ let tokenClient = null;
 let folderId = null;
 let fileIdCache = {};
 
+function saveTokenCache(token, expiresInSec){
+  const expiry = Date.now() + (Math.max(0, expiresInSec - 60) * 1000); // marge de sécurité de 60s
+  localStorage.setItem('gdrive_access_token', token);
+  localStorage.setItem('gdrive_token_expiry', String(expiry));
+}
+function loadCachedToken(){
+  const token = localStorage.getItem('gdrive_access_token');
+  const expiry = parseInt(localStorage.getItem('gdrive_token_expiry') || '0', 10);
+  return (token && Date.now() < expiry) ? token : null;
+}
+
 function initGoogle(){
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
@@ -147,6 +158,7 @@ function initGoogle(){
     callback: async (resp) => {
       if(resp && resp.access_token){
         accessToken = resp.access_token;
+        saveTokenCache(resp.access_token, resp.expires_in || 3600);
         localStorage.setItem('gdrive_signed_in', '1');
         connected = true;
         await loadAll();
@@ -163,9 +175,20 @@ function initGoogle(){
 
 function signIn(){ tokenClient.requestAccessToken({ prompt: 'consent' }); }
 
-/** Tentative de reconnexion silencieuse (sans repasser par l'écran de consentement)
- *  si l'utilisateur s'était déjà connecté lors d'une visite précédente. */
-function trySilentSignIn(){
+/** Réutilise le jeton précédent tant qu'il est encore valide (~1h) — évite de redemander
+ *  une connexion à chaque réouverture rapprochée de l'app. Sinon, tente une reconnexion
+ *  silencieuse ; si elle échoue (fréquent sur iPhone en mode "écran d'accueil", dont le
+ *  stockage est isolé de Safari), l'écran de connexion classique réapparaît. */
+async function trySilentSignIn(){
+  const cached = loadCachedToken();
+  if(cached){
+    accessToken = cached;
+    connected = true;
+    await loadAll();
+    startAutoRefresh();
+    render();
+    return;
+  }
   if(localStorage.getItem('gdrive_signed_in') !== '1') { render(); return; }
   tokenClient.requestAccessToken({ prompt: '' });
 }
@@ -178,7 +201,10 @@ async function driveFetch(url, options = {}){
   if(res.status === 401){
     // jeton expiré : on redemande silencieusement, puis on relance l'appel une fois
     await new Promise((resolve) => {
-      tokenClient.callback = (resp) => { if(resp && resp.access_token) accessToken = resp.access_token; resolve(); };
+      tokenClient.callback = (resp) => {
+        if(resp && resp.access_token){ accessToken = resp.access_token; saveTokenCache(resp.access_token, resp.expires_in || 3600); }
+        resolve();
+      };
       tokenClient.requestAccessToken({ prompt: '' });
     });
     return fetch(url, { ...options, headers: { ...(options.headers || {}), 'Authorization': 'Bearer ' + accessToken } });
