@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Recettes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --black:#0a0a0a; --charcoal:#1c1c1c; --darkgray:#3a3a3a; --midgray:#8a8a8a;
+    --lightgray:#e4e4e4; --offwhite:#faf9f7; --white:#ffffff; --accent:#7a5a48; --danger:#8a3a30;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Inter',sans-serif;background:var(--offwhite);color:var(--black)}
+  .serif{font-family:'Fraunces',serif}
+  #app{max-width:1800px;margin:0 auto;padding:24px 32px 80px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+  h1{font-size:28px;font-weight:600;margin:0}
+  .status{font-size:12px;color:var(--midgray);margin-top:2px}
+  .status.ok{color:#2f6b3f}
+  .status.err{color:var(--danger)}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap}
+  button{font-family:inherit;font-size:13px;border:1px solid var(--lightgray);background:var(--white);
+    color:var(--black);padding:9px 14px;border-radius:10px;cursor:pointer}
+  button:hover{background:var(--offwhite)}
+  button.primary{background:var(--black);color:var(--white);border-color:var(--black)}
+  button.primary:hover{background:var(--charcoal)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .icon-btn{width:36px;height:36px;padding:0;display:flex;align-items:center;justify-content:center;font-size:15px}
+  input[type=text],textarea{font-family:inherit;font-size:14px;border:1px solid var(--lightgray);
+    border-radius:10px;padding:9px 12px;background:var(--white);width:100%}
+  input[type=text]:focus,textarea:focus{outline:none;border-color:var(--darkgray)}
+  .tabs{display:flex;gap:6px;margin-bottom:18px}
+  .tab{padding:8px 16px;border-radius:999px;font-size:13px;border:1px solid var(--lightgray);
+    background:var(--white);cursor:pointer}
+  .tab.active{background:var(--black);color:var(--white);border-color:var(--black)}
+  .search{margin-bottom:18px;max-width:360px;display:flex;align-items:center;gap:8px}
+  .empty{text-align:center;padding:60px 20px;color:var(--midgray)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px}
+  .card{cursor:pointer;text-align:left}
+  .thumb{aspect-ratio:1;border-radius:14px;background:var(--lightgray);display:flex;align-items:center;
+    justify-content:center;overflow:hidden;color:var(--midgray);font-size:26px}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .card .title{font-size:13px;font-weight:500;margin-top:8px;line-height:1.3}
+  .card .type{font-size:11px;color:var(--midgray);margin-top:2px}
+  .panel{background:var(--white);border:1px solid var(--lightgray);border-radius:16px;padding:20px}
+  .field-row{display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--offwhite)}
+  .field-row:last-child{border-bottom:none}
+  .field-row label{font-size:13px;color:var(--midgray);flex-shrink:0;min-width:78px}
+  .field-row input{max-width:220px;border:none;background:transparent;padding:4px 0}
+  .field-row input:focus{outline:none}
+  .field-row select{
+    appearance:none;-webkit-appearance:none;-moz-appearance:none;
+    border:1px solid var(--lightgray);border-radius:999px;
+    padding:6px 30px 6px 14px;font-size:13px;font-family:inherit;color:var(--black);
+    background-color:var(--white);cursor:pointer;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%238a8a8a'/></svg>");
+    background-repeat:no-repeat;background-position:right 12px center;
+  }
+  .field-row select:hover{border-color:var(--darkgray)}
+  .section-title{font-size:15px;font-weight:600;margin:22px 0 10px}
+  .list-item{display:flex;align-items:center;gap:6px;padding:6px 0}
+  .list-item .txt{font-size:14px}
+  .list-item button{border:none;background:transparent;color:var(--midgray);font-size:13px;padding:2px 4px;cursor:pointer;flex-shrink:0}
+  .list-item button:hover{color:var(--danger)}
+  .stars{display:inline-flex;gap:2px;vertical-align:middle}
+  .star{position:relative;width:22px;height:22px;cursor:pointer}
+  .star .halfzone{position:absolute;top:0;bottom:0;width:50%;z-index:2}
+  .star .halfzone.left{left:0}
+  .star .halfzone.right{right:0}
+  .add-row{display:flex;gap:8px;margin-top:6px}
+  .add-row button{white-space:nowrap}
+  .step-num{color:var(--midgray);width:22px;flex-shrink:0}
+  .top-actions{display:flex;justify-content:space-between;margin-bottom:16px}
+  .chip{display:inline-flex;gap:6px;padding:5px 12px;border-radius:999px;font-size:12px;border:1px solid var(--lightgray);cursor:pointer}
+  .chip.sel{background:var(--black);color:var(--white);border-color:var(--black)}
+  .detail-top{display:flex;gap:20px;align-items:flex-start;margin-bottom:6px}
+  .detail-info{flex:1;min-width:0}
+  .cover{width:150px;height:150px;flex-shrink:0;border-radius:14px;background:var(--lightgray);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--midgray);font-size:26px;position:relative}
+  .cover img{width:100%;height:100%;object-fit:cover}
+  .cover .photobtn{position:absolute;bottom:6px;right:6px;font-size:11px;padding:6px 10px}
+  .btn-full{width:100%}
+  .shop-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--offwhite)}
+  .shop-row input[type=checkbox]{width:17px;height:17px}
+  .shop-row .name{flex:1;font-size:14px}
+  .shop-row .name.done{text-decoration:line-through;color:var(--midgray)}
+  .from{font-size:11px;color:var(--midgray)}
+  .hint{font-size:12px;color:var(--midgray);line-height:1.6}
+  .connect-box{text-align:center;padding:70px 20px}
+  .layout{display:flex;gap:28px;align-items:flex-start}
+  .sidebar{width:180px;flex-shrink:0;position:sticky;top:24px}
+  .sidebar-item{padding:9px 14px;border-radius:10px;font-size:13px;cursor:pointer;margin-bottom:3px;
+    color:var(--darkgray);display:flex;justify-content:space-between;align-items:center}
+  .sidebar-item:hover{background:var(--white)}
+  .sidebar-item.active{background:var(--black);color:var(--white);font-weight:500}
+  .sidebar-item .count{font-size:11px;color:var(--midgray)}
+  .sidebar-item.active .count{color:var(--lightgray)}
+  .main-col{flex:1;min-width:0}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const TYPES = ["apéritif","entrée","plat","dessert","soupe","sauce","technique","autre"];
+const CATEGORIES = [
+  { key: "tous", label: "Toutes les recettes" },
+  { key: "apéritif", label: "Apéritif" },
+  { key: "entrée", label: "Entrée" },
+  { key: "plat", label: "Plat" },
+  { key: "dessert", label: "Dessert" },
+  { key: "soupe", label: "Soupe" },
+  { key: "sauce", label: "Sauce" },
+  { key: "technique", label: "Techniques" }
+];
+let currentCategory = "tous";
+let dirHandle = null;
+let recipes = [];
+let shopping = [];
+let currentTab = "list";
+let showImport = false;
+let importState = { method: "text", text: "", url: "", loading: false, error: "" };
+let openRecipeId = null;
+let searchQuery = "";
+let refreshTimer = null;
+
+function uid(){ return 'r_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8); }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ---------- IndexedDB (mémorise le dossier choisi entre deux ouvertures) ----------
+function idbOpen(){
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('recettes-fs', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('handles');
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function idbSet(key, val){
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('handles','readwrite');
+    tx.objectStore('handles').put(val, key);
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  });
+}
+async function idbGet(key){
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('handles','readonly');
+    const req = tx.objectStore('handles').get(key);
+    req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error);
+  });
+}
+
+// ---------- Accès au dossier ----------
+async function pickFolder(){
+  try{
+    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    await idbSet('recettesDir', dirHandle);
+    await loadAll();
+    startAutoRefresh();
+  }catch(e){ /* annulé par l'utilisateur */ }
+  render();
+}
+async function tryReconnect(){
+  try{
+    const handle = await idbGet('recettesDir');
+    if(!handle) return false;
+    const perm = await handle.queryPermission({ mode: 'readwrite' });
+    if(perm === 'granted'){ dirHandle = handle; return true; }
+    return 'prompt';
+  }catch(e){
+    console.warn('Reconnexion automatique impossible, dossier oublié :', e);
+    try{ await idbSet('recettesDir', null); }catch(e2){}
+    return false;
+  }
+}
+async function reconnectClick(){
+  try{
+    const handle = await idbGet('recettesDir');
+    if(!handle){ dirHandle = null; render(); return; }
+    const perm = await handle.requestPermission({ mode: 'readwrite' });
+    if(perm === 'granted'){ dirHandle = handle; await loadAll(); startAutoRefresh(); render(); return; }
+    dirHandle = null; render();
+  }catch(e){
+    console.warn('Reconnexion impossible :', e);
+    try{ await idbSet('recettesDir', null); }catch(e2){}
+    dirHandle = null;
+    render(); // réaffiche le bouton "Choisir le dossier" — le prochain clic sera un geste utilisateur frais
+  }
+}
+
+async function loadAll(){
+  if(!dirHandle) return;
+  const newRecipes = [];
+  let newShopping = [];
+  for await (const [name, handle] of dirHandle.entries()){
+    if(handle.kind !== 'file' || !name.endsWith('.json')) continue;
+    try{
+      const file = await handle.getFile();
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if(name === '_shopping-list.json'){ newShopping = Array.isArray(data) ? data : []; }
+      else if(data && data.id) newRecipes.push(data);
+    }catch(e){ /* fichier illisible ou en cours d'écriture par un autre appareil : ignoré ce cycle */ }
+  }
+  newRecipes.sort((a,b) => (a.title||'').toLowerCase().localeCompare((b.title||'').toLowerCase()));
+  recipes = newRecipes;
+  shopping = newShopping;
+}
+
+async function writeRecipeFile(recipe){
+  recipe.updatedAt = Date.now();
+  const fh = await dirHandle.getFileHandle(recipe.id + '.json', { create: true });
+  const w = await fh.createWritable();
+  await w.write(JSON.stringify(recipe, null, 2));
+  await w.close();
+}
+async function deleteRecipeFile(recipe){
+  try{ await dirHandle.removeEntry(recipe.id + '.json'); }catch(e){}
+}
+async function writeShoppingFile(){
+  const fh = await dirHandle.getFileHandle('_shopping-list.json', { create: true });
+  const w = await fh.createWritable();
+  await w.write(JSON.stringify(shopping, null, 2));
+  await w.close();
+}
+
+function startAutoRefresh(){
+  if(refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(async () => {
+    if(openRecipeId) return; // on n'écrase pas ce que l'utilisateur est en train d'éditer
+    await loadAll();
+    render();
+  }, 5000);
+}
+
+// ---------- Rendu ----------
+function render(){
+  const app = document.getElementById('app');
+  const active = document.activeElement;
+  const activeId = (active && active.id) ? active.id : null;
+  const selStart = active && typeof active.selectionStart === 'number' ? active.selectionStart : null;
+  const selEnd = active && typeof active.selectionEnd === 'number' ? active.selectionEnd : null;
+
+  if(!dirHandle){
+    app.innerHTML = renderConnect();
+    return;
+  }
+  if(showImport){
+    app.innerHTML = renderImport();
+  } else if(openRecipeId !== null){
+    app.innerHTML = renderDetail();
+  } else {
+    app.innerHTML = (currentTab === 'list') ? renderList() : renderShopping();
+  }
+
+  if(activeId){
+    const el = document.getElementById(activeId);
+    if(el){
+      el.focus();
+      if(selStart !== null && el.setSelectionRange){
+        try{ el.setSelectionRange(selStart, selEnd); }catch(e){}
+      }
+    }
+  }
+}
+
+function renderConnect(){
+  return `
+    <div class="connect-box">
+      <div class="serif" style="font-size:24px;margin-bottom:8px">Recettes</div>
+      <p class="hint" style="max-width:420px;margin:0 auto 20px">
+        Choisis le dossier de recettes synchronisé par Google Drive sur ce PC.
+        L'app lira et écrira directement les fichiers à cet endroit.
+      </p>
+      <button class="primary" onclick="pickFolder()">Choisir le dossier Google Drive</button>
+    </div>`;
+}
+
+function renderHeader(){
+  return `
+    <header>
+      <div>
+        <h1 class="serif">Recettes</h1>
+        <div class="status ok">Connecté · ${recipes.length} recette${recipes.length!==1?'s':''} · actualisation auto.</div>
+      </div>
+      <div class="btnrow">
+        <button class="icon-btn" title="Actualiser maintenant" onclick="manualRefresh()">⟳</button>
+        <button class="primary" onclick="openImport()">+ Depuis site / photo / PDF</button>
+        <button onclick="exportNotionZip()">Exporter vers Notion</button>
+        <button onclick="document.getElementById('importInput').click()">Importer (.zip Notion)</button>
+        <input type="file" id="importInput" accept=".zip" style="display:none" onchange="importNotionZip(this.files[0])">
+      </div>
+    </header>
+    <div class="tabs">
+      <div class="tab ${currentTab==='list'?'active':''}" onclick="switchTab('list')">Recettes</div>
+      <div class="tab ${currentTab==='shopping'?'active':''}" onclick="switchTab('shopping')">Liste de courses</div>
+    </div>`;
+}
+
+function renderSidebar(){
+  const items = CATEGORIES.map(c => {
+    const count = c.key === 'tous' ? recipes.length
+      : recipes.filter(r => (r.type||'').toLowerCase() === c.key).length;
+    return `<div class="sidebar-item ${currentCategory===c.key?'active':''}" onclick="setCategory('${c.key}')">
+      <span>${c.label}</span><span class="count">${count}</span>
+    </div>`;
+  }).join('');
+  return `<div class="sidebar">${items}</div>`;
+}
+
+function renderList(){
+  const q = searchQuery.trim().toLowerCase();
+  let filtered = currentCategory === 'tous' ? recipes : recipes.filter(r => (r.type||'').toLowerCase() === currentCategory);
+  if(q) filtered = filtered.filter(r => (r.title||'').toLowerCase().includes(q));
+  const cards = filtered.map(r => `
+    <div class="card" onclick="openRecipe('${r.id}')">
+      <div class="thumb">${r.imageDataUrl ? `<img src="${r.imageDataUrl}">` : '🍽'}</div>
+      <div class="title">${escapeHtml(r.title || 'Sans titre')}</div>
+      <div class="type">${escapeHtml((r.type||'').replace(/^./, c=>c.toUpperCase()))}</div>
+      ${r.rating ? `<div style="font-size:11px;color:var(--midgray);margin-top:2px">${miniStars(r.rating)}</div>` : ''}
+    </div>`).join('');
+  return renderHeader() + `
+    <div class="layout">
+      ${renderSidebar()}
+      <div class="main-col">
+        <div class="search">
+          <input type="text" id="searchInput" placeholder="Rechercher une recette..." value="${escapeHtml(searchQuery)}"
+            oninput="searchQuery=this.value; render()">
+          <button class="primary" onclick="openRecipe(null)">+ Nouvelle</button>
+        </div>
+        ${filtered.length === 0
+          ? `<div class="empty">${recipes.length===0 ? "Aucune recette dans ce dossier pour l'instant." : "Aucun résultat."}</div>`
+          : `<div class="grid">${cards}</div>`}
+      </div>
+    </div>`;
+}
+
+function setCategory(key){ currentCategory = key; render(); }
+
+function renderShopping(){
+  const rows = shopping.map(it => `
+    <div class="shop-row">
+      <input type="checkbox" ${it.checked?'checked':''} onchange="toggleShopItem('${it.id}')">
+      <div>
+        <div class="name ${it.checked?'done':''}">${escapeHtml(it.name)}</div>
+        ${it.fromRecipe ? `<div class="from">${escapeHtml(it.fromRecipe)}</div>` : ''}
+      </div>
+      <button onclick="deleteShopItem('${it.id}')">✕</button>
+    </div>`).join('');
+  return renderHeader() + `
+    <div class="top-actions">
+      <div class="add-row" style="flex:1;max-width:360px">
+        <input type="text" id="newShopItem" placeholder="Ajouter un article...">
+        <button onclick="addShopItem()">Ajouter</button>
+      </div>
+      ${shopping.some(i=>i.checked) ? `<button onclick="clearCheckedShop()">Effacer cochés</button>` : ''}
+    </div>
+    ${shopping.length===0 ? `<div class="empty">Liste vide.</div>` : `<div class="panel">${rows}</div>`}`;
+}
+
+function renderDetail(){
+  const r = openRecipeId === 'new' ? null : recipes.find(x => x.id === openRecipeId);
+  const defaultType = (currentCategory !== 'tous') ? currentCategory : 'plat';
+  const rec = r || { id: uid(), title:'', type:defaultType, cuisson:'', portions:'', preparation:'', ingredients:[], steps:[], source:'', imageDataUrl:'', rating:0 };
+  window.__draft = rec;
+
+  const typeChips = TYPES.map(t => `<span class="chip ${rec.type===t?'sel':''}" onclick="setDraftType('${t}')">${t}</span>`).join(' ');
+  const ingRows = rec.ingredients.map((ing,i) => `
+    <div class="list-item"><div class="txt">• ${escapeHtml(ing)}</div>
+    <button onclick="removeIngredient(${i})">✕</button></div>`).join('');
+  const stepRows = rec.steps.map((s,i) => `
+    <div class="list-item"><div class="step-num">${i+1}.</div><div class="txt">${escapeHtml(s)}</div>
+    <button onclick="removeStep(${i})">✕</button></div>`).join('');
+  return `
+    <header>
+      <button onclick="closeDetail()">← Retour</button>
+      <div class="btnrow">
+        ${r ? `<button onclick="addToShopping('${rec.id}')">+ Liste de courses</button>` : ''}
+        ${r ? `<button onclick="removeRecipe('${rec.id}')">Supprimer</button>` : ''}
+        <button class="primary" onclick="saveDraft()">Enregistrer</button>
+      </div>
+    </header>
+    <div class="panel">
+      <div class="detail-top">
+        <div class="detail-info">
+          <input type="text" value="${escapeHtml(rec.title)}" placeholder="Titre de la recette"
+            style="font-size:22px;font-weight:600;line-height:1.5;border:none;padding:2px 0;margin-bottom:8px;width:100%"
+            oninput="window.__draft.title=this.value">
+          <div style="margin-bottom:10px">${renderStars(rec.rating||0)}</div>
+          <div style="margin-bottom:12px">${typeChips}</div>
+          <div class="field-row"><label>Portions</label>${renderPortionsField(rec.portions)}</div>
+          <div class="field-row"><label>Préparation</label>${renderDurationField('preparation', rec.preparation)}</div>
+          <div class="field-row"><label>Cuisson</label>${renderDurationField('cuisson', rec.cuisson)}</div>
+        </div>
+        <div class="cover">
+          ${rec.imageDataUrl ? `<img src="${rec.imageDataUrl}">` : '🍽'}
+          <button class="photobtn" onclick="document.getElementById('photoInput').click()">Changer</button>
+          <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="pickPhoto(this.files[0])">
+        </div>
+      </div>
+
+      <div class="section-title">Ingrédients</div>
+      ${ingRows}
+      <div class="add-row"><input type="text" id="newIng" placeholder="Ajouter un ingrédient"><button onclick="addIngredient()">Ajouter</button></div>
+
+      <div class="section-title">Préparation</div>
+      ${stepRows}
+      <div class="add-row"><input type="text" id="newStep" placeholder="Ajouter une étape"><button onclick="addStep()">Ajouter</button></div>
+    </div>`;
+}
+
+// ---------- Actions ----------
+function switchTab(t){ currentTab = t; render(); }
+function openRecipe(id){ openRecipeId = id === null ? 'new' : id; render(); }
+function closeDetail(){ openRecipeId = null; render(); }
+function setDraftType(t){ window.__draft.type = t; render(); }
+
+const STAR_PATH = "M12 2l2.9 6.3 6.9.6-5.2 4.6 1.6 6.8L12 16.9 5.8 20.3l1.6-6.8L2.2 8.9l6.9-.6L12 2z";
+
+/** Icône d'étoile SVG remplie à un pourcentage donné (0, 50 ou 100) — plus net qu'un
+ *  découpage de caractère "★" par largeur en %, qui donne un rendu bancal pour les demi-étoiles. */
+function starIcon(fillPct, size, filledColor){
+  const clipId = 'sc' + Math.random().toString(36).slice(2, 9);
+  return `
+    <svg width="${size}" height="${size}" viewBox="0 0 24 24" style="display:block;flex-shrink:0">
+      <defs><clipPath id="${clipId}"><rect x="0" y="0" width="${24 * fillPct / 100}" height="24"/></clipPath></defs>
+      <path d="${STAR_PATH}" style="fill:var(--lightgray)"/>
+      <path d="${STAR_PATH}" style="fill:${filledColor}" clip-path="url(#${clipId})"/>
+    </svg>`;
+}
+
+function miniStars(rating){
+  let html = '<div style="display:inline-flex;align-items:center;gap:1px">';
+  for(let i = 0; i < 5; i++){
+    const filled = Math.max(0, Math.min(1, rating - i));
+    html += starIcon(Math.round(filled * 100), 12, 'var(--black)');
+  }
+  html += '</div>';
+  return html;
+}
+
+/** Affiche 5 étoiles cliquables, avec possibilité de noter par demi-étoile
+ *  (clic sur la moitié gauche d'une étoile = +0.5, moitié droite = +1). */
+function renderStars(rating){
+  let html = '<div class="stars">';
+  for(let i = 0; i < 5; i++){
+    const filled = Math.max(0, Math.min(1, rating - i)); // 0, 0.5 ou 1 pour cette étoile
+    html += `
+      <span class="star">
+        ${starIcon(Math.round(filled * 100), 22, 'var(--black)')}
+        <span class="halfzone left" onclick="setRating(${i}, 0.5)"></span>
+        <span class="halfzone right" onclick="setRating(${i}, 1)"></span>
+      </span>`;
+  }
+  html += '</div>';
+  return html;
+}
+function setRating(starIndex, fraction){
+  const newRating = starIndex + fraction;
+  window.__draft.rating = (window.__draft.rating === newRating) ? 0 : newRating; // recliquer la même note l'efface
+  render();
+}
+
+const PORTIONS_PRESETS = ["1 personne","2 personnes","3 personnes","4 personnes"];
+const DURATION_PRESETS = ["5 min","10 min","15 min","20 min","30 min","45 min",
+  "1 h","1 h 15","1 h 30","1 h 45","2 h","2 h 30","3 h","3 h 30","4 h"];
+
+function renderPortionsField(current){
+  const isPreset = PORTIONS_PRESETS.includes(current);
+  const opts = PORTIONS_PRESETS.map(p => `<option value="${p}" ${current===p?'selected':''}>${p}</option>`).join('');
+  return `
+    <div style="display:flex;align-items:center;gap:8px">
+      <select onchange="onPortionsChange(this.value)">
+        <option value="" ${!current?'selected':''}>—</option>
+        ${opts}
+        <option value="__autre__" ${(current && !isPreset)?'selected':''}>Autre...</option>
+      </select>
+      <input type="text" id="portionsCustom" placeholder="ex: 6 personnes"
+        value="${escapeHtml((current && !isPreset) ? current : '')}"
+        style="display:${(current && !isPreset)?'inline-block':'none'};max-width:130px;width:auto;border:1px solid var(--lightgray);background:var(--white);text-align:left;border-radius:8px;padding:6px 10px"
+        onblur="applyPortionsChange(this.value)">
+    </div>`;
+}
+function extractPersonCount(text){
+  const m = /\d+/.exec(text||'');
+  return m ? parseInt(m[0],10) : null;
+}
+function scaleIngredientText(text, ratio){
+  const fracOnly = /^(\d+)\/(\d+)/.exec(text);
+  if(fracOnly && fracOnly.index === 0){
+    const n = parseFloat(fracOnly[1]), d = parseFloat(fracOnly[2]);
+    if(d){
+      const newVal = (n/d) * ratio;
+      const suffix = text.slice(fracOnly[0].length);
+      return formatScaledQty(newVal) + ' ' + suffix.trimStart();
+    }
+  }
+  const m = /^(\d+(?:[.,]\d+)?)(\s+(\d+)\/(\d+))?/.exec(text);
+  if(m && m.index === 0 && m[1]){
+    let value = parseFloat(m[1].replace(',', '.'));
+    if(m[3] && m[4]){ const fn = parseFloat(m[3]), fd = parseFloat(m[4]); if(fd) value += fn/fd; }
+    const newVal = value * ratio;
+    const suffix = text.slice(m[0].length);
+    return formatScaledQty(newVal) + ' ' + suffix.trimStart();
+  }
+  return text;
+}
+function formatScaledQty(v){
+  const rounded = Math.round(v*100)/100;
+  if(Number.isInteger(rounded)) return String(rounded);
+  const oneDecimal = Math.round(rounded*10)/10;
+  return Number.isInteger(oneDecimal) ? String(oneDecimal) : String(oneDecimal).replace('.', ',');
+}
+/** Change le nombre de portions et recalcule proportionnellement les quantités d'ingrédients. */
+function applyPortionsChange(newVal){
+  const oldCount = extractPersonCount(window.__draft.portions);
+  const newCount = extractPersonCount(newVal);
+  if(oldCount && newCount && oldCount > 0 && oldCount !== newCount){
+    window.__draft.ingredients = window.__draft.ingredients.map(ing => scaleIngredientText(ing, newCount/oldCount));
+  }
+  window.__draft.portions = newVal;
+  render();
+}
+function onPortionsChange(val){
+  const custom = document.getElementById('portionsCustom');
+  if(val === '__autre__'){
+    custom.style.display = 'inline-block';
+    custom.focus();
+    return;
+  }
+  custom.style.display = 'none';
+  applyPortionsChange(val);
+}
+
+function renderDurationField(field, current){
+  const isPreset = DURATION_PRESETS.includes(current);
+  const opts = DURATION_PRESETS.map(p => `<option value="${p}" ${current===p?'selected':''}>${p}</option>`).join('');
+  return `
+    <div style="display:flex;align-items:center;gap:8px">
+      <select onchange="onDurationChange('${field}', this.value)">
+        <option value="" ${!current?'selected':''}>—</option>
+        ${opts}
+        <option value="__autre__" ${(current && !isPreset)?'selected':''}>Autre...</option>
+      </select>
+      <input type="text" id="${field}Custom" placeholder="ex: 25 min"
+        value="${escapeHtml((current && !isPreset) ? current : '')}"
+        style="display:${(current && !isPreset)?'inline-block':'none'};max-width:130px;width:auto;border:1px solid var(--lightgray);background:var(--white);text-align:left;border-radius:8px;padding:6px 10px"
+        oninput="window.__draft.${field}=this.value">
+    </div>`;
+}
+function onDurationChange(field, val){
+  const custom = document.getElementById(field+'Custom');
+  if(val === '__autre__'){
+    custom.style.display = 'inline-block';
+    window.__draft[field] = custom.value;
+    custom.focus();
+  } else {
+    custom.style.display = 'none';
+    window.__draft[field] = val;
+  }
+}
+function addIngredient(){
+  const el = document.getElementById('newIng');
+  if(el.value.trim()){ window.__draft.ingredients.push(el.value.trim()); render(); }
+}
+function removeIngredient(i){ window.__draft.ingredients.splice(i,1); render(); }
+function addStep(){
+  const el = document.getElementById('newStep');
+  if(el.value.trim()){ window.__draft.steps.push(el.value.trim()); render(); }
+}
+function removeStep(i){ window.__draft.steps.splice(i,1); render(); }
+
+function pickPhoto(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { window.__draft.imageDataUrl = reader.result; render(); };
+  reader.readAsDataURL(file);
+}
+
+async function saveDraft(){
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  const rec = window.__draft;
+  if(!rec.title.trim()) rec.title = 'Sans titre';
+  await writeRecipeFile(rec);
+  await loadAll();
+  openRecipeId = null;
+  render();
+}
+async function removeRecipe(id){
+  const r = recipes.find(x=>x.id===id);
+  if(!r) return;
+  await deleteRecipeFile(r);
+  await loadAll();
+  openRecipeId = null;
+  render();
+}
+const UNIT_WORDS = ["kg","g","ml","cl","l",
+  "c\\.?\\s?à\\.?\\s?s\\.?", "c\\.?\\s?à\\.?\\s?c\\.?",
+  "cuillères? à soupe","cuillères? à café","tasses?","pincées?","tranches?",
+  "gousses?","oeufs?","œufs?","branches?","bottes?","verres?","boîtes?","pots?","sachets?"];
+
+/** Extrait quantité/unité/nom de produit, pour fusionner "2 poivrons" + "3 poivrons" -> "5 poivrons". */
+function parseIngredientQty(text){
+  const t = (text||'').trim();
+  let qty = null, rest = t;
+  const fracOnly = /^\s*(\d+)\/(\d+)\s*(.*)$/.exec(t);
+  if(fracOnly){
+    const n = parseFloat(fracOnly[1]), d = parseFloat(fracOnly[2]);
+    if(d) qty = n/d;
+    rest = fracOnly[3].trim();
+  } else {
+    const m = /^\s*(\d+(?:[.,]\d+)?)(?:\s+(\d+)\/(\d+))?\s*(.*)$/.exec(t);
+    if(m && m[1]){
+      let base = parseFloat(m[1].replace(',', '.'));
+      qty = base;
+      if(m[2] && m[3]){ const fn = parseFloat(m[2]), fd = parseFloat(m[3]); if(fd) qty = base + fn/fd; }
+      rest = (m[4]||'').trim();
+    }
+  }
+  let unit = '';
+  for(const u of UNIT_WORDS){
+    const re = new RegExp('^(' + u + ')\\.?\\s+(.*)$', 'i');
+    const um = re.exec(rest);
+    if(um){ unit = um[1].toLowerCase(); rest = um[2].trim(); break; }
+  }
+  return { qty, unit, rest: rest.toLowerCase() };
+}
+function formatQty(qty){
+  if(Number.isInteger(qty)) return String(qty);
+  return String(Math.round(qty*100)/100).replace(/\.?0+$/,'');
+}
+
+async function addToShopping(id){
+  const r = recipes.find(x=>x.id===id);
+  if(!r) return;
+  const items = shopping.slice();
+  const recipeKey = r.title.trim();
+  let changed = false;
+
+  r.ingredients.forEach(ing => {
+    const parsed = parseIngredientQty(ing);
+    let matchIndex = -1;
+    for(let i=0;i<items.length;i++){
+      const ep = parseIngredientQty(items[i].name);
+      const contributors = (items[i].fromRecipe||'').split(',').map(s=>s.trim());
+      if(ep.rest === parsed.rest && ep.unit === parsed.unit && contributors.indexOf(recipeKey) === -1){
+        matchIndex = i; break;
+      }
+    }
+    if(matchIndex >= 0 && parsed.qty !== null){
+      const existing = items[matchIndex];
+      const ep = parseIngredientQty(existing.name);
+      if(ep.qty !== null){
+        const newQty = ep.qty + parsed.qty;
+        const unitPart = parsed.unit ? (' ' + parsed.unit) : '';
+        const newName = (formatQty(newQty) + unitPart + ' ' + parsed.rest).trim();
+        const contributors = (existing.fromRecipe||'').split(',').map(s=>s.trim()).filter(Boolean);
+        if(contributors.indexOf(recipeKey) === -1) contributors.push(recipeKey);
+        items[matchIndex] = { ...existing, name: newName, fromRecipe: contributors.join(', ') };
+        changed = true;
+        return;
+      }
+    }
+    const alreadyThere = items.some(i => i.name.trim().toLowerCase() === ing.trim().toLowerCase() &&
+      (i.fromRecipe||'').split(',').map(s=>s.trim()).indexOf(recipeKey) !== -1);
+    if(!alreadyThere){
+      items.push({ id: uid(), name: ing.trim(), checked:false, fromRecipe: recipeKey });
+      changed = true;
+    }
+  });
+
+  if(changed){ shopping = items; await writeShoppingFile(); }
+  alert('Liste de courses mise à jour.');
+}
+
+async function toggleShopItem(id){
+  const it = shopping.find(i=>i.id===id);
+  if(it){ it.checked = !it.checked; await writeShoppingFile(); render(); }
+}
+async function deleteShopItem(id){
+  shopping = shopping.filter(i=>i.id!==id);
+  await writeShoppingFile(); render();
+}
+async function addShopItem(){
+  const el = document.getElementById('newShopItem');
+  if(el.value.trim()){
+    shopping.push({ id: uid(), name: el.value.trim(), checked:false, fromRecipe:'' });
+    await writeShoppingFile(); render();
+  }
+}
+async function clearCheckedShop(){
+  shopping = shopping.filter(i=>!i.checked);
+  await writeShoppingFile(); render();
+}
+async function manualRefresh(){ await loadAll(); render(); }
+
+// ---------- Importer une recette (site web / photo / PDF) ----------
+
+function openImport(){ showImport = true; importState = { method:'text', text:'', url:'', loading:false, error:'' }; render(); }
+function closeImport(){ showImport = false; render(); }
+function setImportMethod(m){ importState.method = m; importState.error=''; render(); }
+
+async function fetchUrlText(url){
+  try{
+    const res = await fetch(url, { mode: 'cors' });
+    if(!res.ok) return null;
+    return await res.text();
+  }catch(e){ return null; }
+}
+
+function findRecipeObject(obj){
+  if(!obj || typeof obj !== 'object') return null;
+  const type = obj['@type'];
+  const isRecipe = Array.isArray(type)
+    ? type.some(t => String(t).toLowerCase()==='recipe')
+    : String(type||'').toLowerCase()==='recipe';
+  if(isRecipe) return obj;
+  if(Array.isArray(obj['@graph'])){
+    for(const child of obj['@graph']){ const found = findRecipeObject(child); if(found) return found; }
+  }
+  return null;
+}
+
+function isoDurationToText(iso){
+  if(!iso) return '';
+  const m = /PT(?:(\d+)H)?(?:(\d+)M)?/.exec(iso);
+  if(!m) return '';
+  const h = parseInt(m[1]||'0',10), min = parseInt(m[2]||'0',10);
+  if(h>0 && min>0) return h+' h '+min;
+  if(h>0) return h+' h';
+  if(min>0) return min+' min';
+  return '';
+}
+
+function mapCategoryFromSchema(raw){
+  const c = (raw||'').toString().toLowerCase();
+  if(c.includes('dessert')) return 'dessert';
+  if(c.includes('entr') || c.includes('starter')) return 'entrée';
+  if(c.includes('soup')) return 'soupe';
+  if(c.includes('sauce')) return 'sauce';
+  if(c.includes('apéritif')||c.includes('aperitif')||c.includes('appetizer')) return 'apéritif';
+  return 'plat';
+}
+
+function buildRecipeFromJsonLd(obj, sourceUrl){
+  const title = obj.name || '';
+  const ingredients = Array.isArray(obj.recipeIngredient) ? obj.recipeIngredient.slice() : [];
+  const steps = [];
+  function collect(value){
+    if(Array.isArray(value)){ value.forEach(collect); return; }
+    if(value && typeof value === 'object'){
+      const t = (value['@type']||'').toString().toLowerCase();
+      if(t === 'howtosection'){ collect(value.itemListElement); return; }
+      const text = value.text || value.name || '';
+      if(text) steps.push(String(text).trim());
+      return;
+    }
+    if(typeof value === 'string'){
+      value.split('\n').map(s=>s.trim()).filter(Boolean).forEach(s=>steps.push(s));
+    }
+  }
+  collect(obj.recipeInstructions);
+  let portions = '';
+  if(typeof obj.recipeYield === 'string') portions = obj.recipeYield;
+  else if(Array.isArray(obj.recipeYield)) portions = obj.recipeYield[0] || '';
+  const preparation = isoDurationToText(obj.prepTime) || isoDurationToText(obj.totalTime);
+  const cuisson = isoDurationToText(obj.cookTime);
+  return { id: uid(), title, type: mapCategoryFromSchema(obj.recipeCategory), cuisson, portions,
+    preparation, ingredients, steps, source: sourceUrl, imageDataUrl:'', rating:0 };
+}
+
+function parseJsonLdRecipe(html, sourceUrl){
+  const blocks = [...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)].map(m=>m[1]);
+  for(const block of blocks){
+    try{
+      const data = JSON.parse(block.trim());
+      const candidates = Array.isArray(data) ? data : [data];
+      for(const obj of candidates){
+        const recipeObj = findRecipeObject(obj);
+        if(recipeObj) return buildRecipeFromJsonLd(recipeObj, sourceUrl);
+      }
+    }catch(e){ continue; }
+  }
+  return null;
+}
+
+async function importFromUrlWeb(url){
+  const html = await fetchUrlText(url);
+  if(!html) return null;
+  const jsonLd = parseJsonLdRecipe(html, url);
+  if(jsonLd && jsonLd.title) return jsonLd;
+  const h1m = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
+  const titlem = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+  const bestTitle = (h1m ? stripHtmlToText(h1m[1]) : '') || (titlem ? titlem[1].trim() : '');
+  const body = stripHtmlToText(html);
+  const combined = bestTitle ? ('# ' + bestTitle + '\n\n' + body) : body;
+  const rec = parseMarkdownRecipe('', combined);
+  if(rec && rec.title){ rec.source = url; return rec; }
+  return null;
+}
+
+function stripHtmlToText(html){
+  let t = html;
+  t = t.replace(/<script[\s\S]*?<\/script>/gi, '');
+  t = t.replace(/<style[\s\S]*?<\/style>/gi, '');
+  t = t.replace(/<(br|\/p|\/li|\/tr|\/h[1-6])[^>]*>/gi, '\n');
+  t = t.replace(/<[^>]+>/g, '');
+  t = t.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g,' ');
+  return t.split('\n').map(s=>s.trim()).filter(Boolean).join('\n');
+}
+
+let tesseractLoading = null;
+function ensureTesseract(){
+  if(window.Tesseract) return Promise.resolve(true);
+  if(tesseractLoading) return tesseractLoading;
+  tesseractLoading = new Promise(resolve => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js';
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
+  });
+  return tesseractLoading;
+}
+async function ocrImage(fileOrCanvas){
+  const ok = await ensureTesseract();
+  if(!ok) return '';
+  const worker = await Tesseract.createWorker('fra');
+  const { data: { text } } = await worker.recognize(fileOrCanvas);
+  await worker.terminate();
+  return text;
+}
+
+let pdfjsLoading = null;
+function ensurePdfJs(){
+  if(window.pdfjsLib) return Promise.resolve(true);
+  if(pdfjsLoading) return pdfjsLoading;
+  pdfjsLoading = new Promise(resolve => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js';
+    s.onload = () => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+      resolve(true);
+    };
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
+  });
+  return pdfjsLoading;
+}
+async function ocrPdf(file){
+  const ok = await ensurePdfJs();
+  if(!ok) return '';
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+  let fullText = '';
+  for(let i=1;i<=pdf.numPages;i++){
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({scale:2});
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    await page.render({canvasContext: ctx, viewport}).promise;
+    fullText += (await ocrImage(canvas)) + '\n';
+  }
+  return fullText;
+}
+
+function renderImport(){
+  const s = importState;
+  const chip = (key,label) => `<span class="chip ${s.method===key?'sel':''}" onclick="setImportMethod('${key}')">${label}</span>`;
+  let body = '';
+  if(s.method === 'text'){
+    body = `
+      <p class="hint">Colle le texte de la recette (copié depuis un site, un livre, etc.)</p>
+      <textarea id="importText" rows="10" style="width:100%">${escapeHtml(s.text)}</textarea>
+      <button class="primary btn-full" style="margin-top:10px" onclick="runTextImport()">Extraire la recette</button>`;
+  } else if(s.method === 'url'){
+    body = `
+      <p class="hint">Colle le lien d'une page de recette. Fonctionne bien sur les sites qui exposent
+      des données structurées ; certains sites bloquent l'accès direct depuis un navigateur (message
+      d'erreur dans ce cas — utilise plutôt l'onglet "Texte" en copiant-collant la page).</p>
+      <input type="text" id="importUrl" placeholder="https://..." value="${escapeHtml(s.url)}">
+      <button class="primary btn-full" style="margin-top:10px" onclick="runUrlImport()">Importer depuis cette page</button>`;
+  } else if(s.method === 'photo'){
+    body = `
+      <p class="hint">Choisis une photo nette d'une page de livre ou de magazine. La reconnaissance de
+      texte tourne dans le navigateur (un composant se télécharge la première fois, connexion requise
+      à ce moment-là seulement).</p>
+      <input type="file" id="photoFile" accept="image/*">
+      <button class="primary btn-full" style="margin-top:10px" onclick="runPhotoImport()">Analyser la photo</button>`;
+  } else {
+    body = `
+      <p class="hint">Choisis un fichier PDF. Chaque page est analysée ; les PDF longs peuvent prendre
+      une bonne minute.</p>
+      <input type="file" id="pdfFile" accept="application/pdf">
+      <button class="primary btn-full" style="margin-top:10px" onclick="runPdfImport()">Analyser le PDF</button>`;
+  }
+  return `
+    <header><button onclick="closeImport()">← Retour</button></header>
+    <div class="panel" style="max-width:520px;margin:0 auto">
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        ${chip('text','Texte')} ${chip('url','URL')} ${chip('photo','Photo')} ${chip('pdf','PDF')}
+      </div>
+      ${body}
+      ${s.loading ? `<p class="hint" style="margin-top:10px">Analyse en cours...</p>` : ''}
+      ${s.error ? `<p style="color:var(--danger);font-size:12px;margin-top:10px">${escapeHtml(s.error)}</p>` : ''}
+    </div>`;
+}
+
+async function finishImport(rec){
+  await writeRecipeFile(rec);
+  await loadAll();
+  showImport = false;
+  openRecipeId = rec.id;
+  render();
+}
+
+async function runTextImport(){
+  importState.text = document.getElementById('importText').value;
+  const rec = parseMarkdownRecipe('', importState.text);
+  if(!rec || !rec.title){ importState.error = "Impossible d'extraire une recette de ce texte."; render(); return; }
+  await finishImport(rec);
+}
+async function runUrlImport(){
+  importState.url = document.getElementById('importUrl').value.trim();
+  if(!importState.url) return;
+  importState.loading = true; importState.error=''; render();
+  const rec = await importFromUrlWeb(importState.url);
+  importState.loading = false;
+  if(!rec){
+    importState.error = "Impossible de lire cette page (souvent bloqué par le site pour des raisons de sécurité du navigateur). Copie le texte de la page et utilise plutôt l'onglet Texte.";
+    render(); return;
+  }
+  await finishImport(rec);
+}
+async function runPhotoImport(){
+  const file = document.getElementById('photoFile').files[0];
+  if(!file) return;
+  importState.loading = true; importState.error=''; render();
+  const text = await ocrImage(file);
+  importState.loading = false;
+  const rec = parseMarkdownRecipe('', text);
+  if(!rec || !rec.title){ importState.error = "Le texte extrait de la photo n'est pas exploitable. Réessaie avec une photo plus nette."; render(); return; }
+  await finishImport(rec);
+}
+async function runPdfImport(){
+  const file = document.getElementById('pdfFile').files[0];
+  if(!file) return;
+  importState.loading = true; importState.error=''; render();
+  const text = await ocrPdf(file);
+  importState.loading = false;
+  const rec = parseMarkdownRecipe('', text);
+  if(!rec || !rec.title){ importState.error = "Le texte extrait du PDF n'est pas exploitable."; render(); return; }
+  await finishImport(rec);
+}
+
+// ---------- Export / Import compatible Notion ----------
+function csvEscape(v){
+  v = v || '';
+  return (v.includes(',')||v.includes('"')||v.includes('\n')) ? '"' + v.replace(/"/g,'""') + '"' : v;
+}
+function buildMarkdown(r){
+  let out = '# ' + r.title + '\n\n';
+  if(r.portions) out += 'Nombre de personnes: ' + r.portions + '\n';
+  if(r.type) out += 'Type: ' + r.type + '\n';
+  if(r.cuisson) out += 'Cuisson: ' + r.cuisson + '\n';
+  if(r.preparation) out += 'Préparation: ' + r.preparation + '\n';
+  if(r.source) out += 'Source: ' + r.source + '\n';
+  out += '\n';
+  if(r.ingredients.length){ out += '## Ingrédients\n\n'; r.ingredients.forEach(i => out += '- ' + i + '\n'); out += '\n'; }
+  if(r.steps.length){ out += '## Préparation\n\n'; r.steps.forEach((s,i) => out += (i+1) + '. ' + s + '\n'); }
+  return out;
+}
+async function exportNotionZip(){
+  const JSZipReady = await ensureJSZip();
+  if(!JSZipReady) return;
+  const zip = new JSZip();
+  let csv = '\uFEFFName,Type,Cuisson,Nombre de personnes,Préparation\r\n';
+  recipes.forEach(r => {
+    csv += [r.title,r.type,r.cuisson,r.portions,r.preparation].map(csvEscape).join(',') + '\r\n';
+  });
+  zip.file('Mes recettes de cuisine.csv', csv);
+  const used = new Set();
+  recipes.forEach(r => {
+    let base = (r.title||'recette').replace(/[\\/:*?"<>|]/g,'');
+    let name = base + '.md', n = 2;
+    while(used.has(name)){ name = base + ' (' + n + ').md'; n++; }
+    used.add(name);
+    zip.file(name, buildMarkdown(r));
+  });
+  const blob = await zip.generateAsync({type:'blob'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'recettes_notion_export.zip'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function parseCsv(text){
+  const rows = []; let field='', row=[], inQ=false;
+  text = text.replace(/^\uFEFF/, '');
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(inQ){
+      if(c === '"' && text[i+1] === '"'){ field+='"'; i++; }
+      else if(c === '"'){ inQ = false; }
+      else field += c;
+    } else if(c === '"'){ inQ = true; }
+    else if(c === ','){ row.push(field); field=''; }
+    else if(c === '\r'){}
+    else if(c === '\n'){ row.push(field); field=''; rows.push(row); row=[]; }
+    else field += c;
+  }
+  if(field || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim()));
+}
+
+function parseMarkdownRecipe(fileName, raw){
+  const lines = raw.replace(/\r\n/g,'\n').split('\n');
+  let title='', type='', cuisson='', portions='', preparation='', source='';
+  const content = [];
+  let insideAside=false;
+  const propRe = /^-?\s*(Nombre de personnes|Portions|Type|Cuisson|Pr[eé]paration|Source)\s*:\s*(.*)$/i;
+  for(const raw2 of lines){
+    const t = raw2.trim();
+    if(t.startsWith('<aside')) insideAside = true;
+    if(insideAside){
+      if(!source){ const m = t.match(/\[[^\]]*\]\((https?:\/\/[^)]+)\)/); if(m) source = m[1]; }
+      if(t.startsWith('</aside')) insideAside = false;
+      continue;
+    }
+    if(!title){ const h = t.match(/^#{1,6}\s*(.*)$/); if(h && h[1].trim()){ title = h[1].trim(); continue; } }
+    const p = t.match(propRe);
+    if(p){
+      const key = p[1].toLowerCase(), val = p[2].trim();
+      if(key.startsWith('nombre')||key==='portions') portions = val;
+      else if(key==='type') type = val;
+      else if(key==='cuisson') cuisson = val;
+      else if(key.startsWith('pr')) preparation = val;
+      else if(key==='source'){ const m = val.match(/\[[^\]]*\]\((https?:\/\/[^)]+)\)/); source = m ? m[1] : val; }
+      continue;
+    }
+    content.push(raw2);
+  }
+  if(!title) title = fileName.replace(/\.md$/i,'').replace(/[ _][0-9a-f]{16,}$/i,'').replace(/_/g,' ').trim();
+
+  const ingKw=['ingr'], stepKw=['préparation','preparation','étape','etape','instructions','méthode','methode'];
+  const stopKw=['notes','variante','conservation','service','astuce','conseil','info','résumé','resume','accord','choix des fromages'];
+  const clean = s => s.replace(/\*\*/g,'').replace(/\*/g,'').trim();
+  const marker = (s,kws) => { let c = clean(s).replace(/^[^\p{L}0-9]+/u,'').toLowerCase(); if(c.length>50) return false; return kws.some(k=>c.includes(k)); };
+
+  let mode=0; const ingredients=[]; const stepsOut=[]; let buf=[];
+  const tightNum = /^(\d+)[.)]\s+(.*)$/;
+  const etapeOnly = /^(?:\d+[.)]\s*)?[eé]tape\s*\d*\s*:?\s*$/i;
+  const etapePfx = /^[eé]tape\s*\d*\s*:?\s*/i;
+  const finalize = t => clean(t.replace(etapePfx,'')).replace(/\s+/g,' ').trim();
+  function flush(){
+    if(!buf.length) return;
+    const hasNum = buf.some(l => tightNum.test(l.trim()));
+    const hasLab = buf.some(l => etapeOnly.test(l.trim()));
+    if(hasNum){
+      let cur=null;
+      for(const l of buf){ const t=l.trim(); if(!t) continue; const m=t.match(tightNum);
+        if(m){ if(cur!==null) stepsOut.push(finalize(cur)); cur=m[2]; } else if(cur!==null) cur+=' '+t; }
+      if(cur!==null) stepsOut.push(finalize(cur));
+    } else if(hasLab){
+      let cur=null;
+      for(const l of buf){ const t=l.trim(); if(!t) continue;
+        if(etapeOnly.test(t)){ if(cur!==null) stepsOut.push(finalize(cur)); cur=''; }
+        else { if(cur===null) cur=''; cur += (cur?' ':'') + t; } }
+      if(cur!==null) stepsOut.push(finalize(cur));
+    } else {
+      let block='';
+      for(const l of buf){ const t=l.trim();
+        if(!t){ if(block){ stepsOut.push(finalize(block)); block=''; } } else block += (block?' ':'') + t; }
+      if(block) stepsOut.push(finalize(block));
+    }
+    buf=[];
+  }
+  for(let raw2 of content){
+    let line = raw2.trim();
+    if(line.startsWith('```')) continue;
+    if(!line){ if(mode===2) buf.push(''); continue; }
+    const h = line.match(/^#{1,6}\s*(.*)$/);
+    const b = !h ? line.match(/^\*\*(.*)\*\*$/) : null;
+    if(h||b){
+      const textOnly = clean(h ? h[1] : b[1]);
+      if(marker(textOnly, ingKw)){ flush(); mode=1; continue; }
+      if(marker(textOnly, stepKw)){ flush(); mode=2; continue; }
+      if(marker(textOnly, stopKw)){ flush(); mode=0; continue; }
+      if(textOnly.length>15) line = textOnly; else continue;
+    }
+    if(mode!==1 && marker(line, ingKw)){ flush(); mode=1; continue; }
+    if(mode!==2 && (marker(line, stepKw) || etapeOnly.test(line))){
+      flush(); mode=2;
+      if(etapeOnly.test(line)){ buf.push(line); continue; }
+      continue;
+    }
+    if(mode===1){ const c = clean(line.replace(/^[-*]\s*/,'')); if(c) ingredients.push(c); }
+    else if(mode===2){ buf.push(line); }
+  }
+  flush();
+
+  return { id: uid(), title, type: type||'plat', cuisson, portions, preparation, ingredients, steps: stepsOut, source, imageDataUrl:'', rating:0 };
+}
+
+async function importNotionZip(file){
+  if(!file) return;
+  const JSZipReady = await ensureJSZip();
+  if(!JSZipReady) return;
+  const buf = await file.arrayBuffer();
+  const csvRows = {}; const mdEntries = [];
+
+  async function walk(zipObj){
+    for(const name of Object.keys(zipObj.files)){
+      const entry = zipObj.files[name];
+      if(entry.dir) continue;
+      const base = name.split('/').pop();
+      if(base.toLowerCase().endsWith('.zip')){
+        const innerBuf = await entry.async('arraybuffer');
+        const inner = await JSZip.loadAsync(innerBuf);
+        await walk(inner);
+      } else if(base.toLowerCase().endsWith('.csv')){
+        const text = await entry.async('string');
+        const rows = parseCsv(text);
+        if(rows.length){
+          const header = rows[0].map(h=>h.trim());
+          rows.slice(1).forEach(row => {
+            const map = {}; header.forEach((h,i) => map[h] = (row[i]||'').trim());
+            if(map.Name) csvRows[map.Name.trim().toLowerCase()] = map;
+          });
+        }
+      } else if(base.toLowerCase().endsWith('.md')){
+        const text = await entry.async('string');
+        mdEntries.push([base, text]);
+      }
+    }
+  }
+  const zip = await JSZip.loadAsync(buf);
+  await walk(zip);
+
+  const results = []; const matched = new Set();
+  for(const [fname, text] of mdEntries){
+    let rec = parseMarkdownRecipe(fname, text);
+    const row = csvRows[rec.title.trim().toLowerCase()];
+    if(row){
+      matched.add(rec.title.trim().toLowerCase());
+      rec.type = rec.type || row['Type'] || 'plat';
+      rec.cuisson = rec.cuisson || row['Cuisson'] || '';
+      rec.portions = rec.portions || row['Nombre de personnes'] || '';
+      rec.preparation = rec.preparation || row['Préparation'] || '';
+    }
+    results.push(rec);
+  }
+  Object.keys(csvRows).forEach(key => {
+    if(!matched.has(key)){
+      const row = csvRows[key];
+      results.push({ id: uid(), title: row['Name']||'', type: row['Type']||'plat', cuisson: row['Cuisson']||'',
+        portions: row['Nombre de personnes']||'', preparation: row['Préparation']||'', ingredients:[], steps:[], source:'', imageDataUrl:'', rating:0 });
+    }
+  });
+
+  const existingTitles = new Set(recipes.map(r => (r.title||'').trim().toLowerCase()));
+  let count = 0;
+  for(const r of results){
+    if(r.title && !existingTitles.has(r.title.trim().toLowerCase())){
+      await writeRecipeFile(r);
+      count++;
+    }
+  }
+  await loadAll();
+  render();
+  alert(count + ' recette(s) importée(s) sur ' + results.length + ' trouvée(s) dans le zip.');
+}
+
+let jsZipLoading = null;
+function ensureJSZip(){
+  if(window.JSZip) return Promise.resolve(true);
+  if(jsZipLoading) return jsZipLoading;
+  jsZipLoading = new Promise(resolve => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.onload = () => resolve(true);
+    s.onerror = () => { alert("Impossible de charger le composant zip (connexion internet requise une seule fois)."); resolve(false); };
+    document.head.appendChild(s);
+  });
+  return jsZipLoading;
+}
+
+// ---------- Démarrage ----------
+(async function init(){
+  const reconnect = await tryReconnect();
+  if(reconnect === true){ await loadAll(); startAutoRefresh(); render(); }
+  else if(reconnect === 'prompt'){
+    document.getElementById('app').innerHTML = `
+      <div class="connect-box">
+        <div class="serif" style="font-size:24px;margin-bottom:8px">Recettes</div>
+        <p class="hint">Le navigateur demande une confirmation avant de rouvrir le dossier déjà choisi.</p>
+        <button class="primary" onclick="reconnectClick()">Reconnecter au dossier Google Drive</button>
+      </div>`;
+  } else {
+    render();
+  }
+})();
+</script>
+</body>
+</html>
