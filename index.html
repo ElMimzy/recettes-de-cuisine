@@ -1511,10 +1511,10 @@ function parseMarkdownRecipe(fileName, raw){
         else { if(cur===null) cur=''; cur += (cur?' ':'') + t; } }
       if(cur!==null) stepsOut.push(finalize(cur));
     } else {
-      let block='';
-      for(const l of buf){ const t=l.trim();
-        if(!t){ if(block){ stepsOut.push(finalize(block)); block=''; } } else block += (block?' ':'') + t; }
-      if(block) stepsOut.push(finalize(block));
+      // Pas de numérotation ni d'étiquette "étape N" détectée : chaque ligne non vide devient
+      // sa propre étape. C'est la structure la plus courante (une étape par ligne, sans
+      // séparation par ligne vide entre elles) ; les lignes vides éventuelles sont ignorées.
+      for(const l of buf){ const t=l.trim(); if(t) stepsOut.push(finalize(t)); }
     }
     buf=[];
   }
