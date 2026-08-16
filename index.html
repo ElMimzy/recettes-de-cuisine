@@ -67,6 +67,11 @@
   .list-item button{border:none;background:transparent;color:var(--midgray);font-size:13px;padding:2px 4px;cursor:pointer;flex-shrink:0}
   .list-item button:hover{color:var(--danger)}
   .stars{display:inline-flex;gap:2px;vertical-align:middle}
+  .dropzone{border:2px dashed var(--lightgray);border-radius:12px;padding:22px 16px;text-align:center;
+    cursor:pointer;font-size:13px;color:var(--midgray);transition:border-color .15s,background .15s}
+  .dropzone:hover{border-color:var(--darkgray)}
+  .dropzone.drag{border-color:var(--accent);background:var(--offwhite);color:var(--black)}
+  .dropzone .filename{color:var(--black);font-weight:500}
   .star{position:relative;width:22px;height:22px;cursor:pointer}
   .star .halfzone{position:absolute;top:0;bottom:0;width:50%;z-index:2}
   .star .halfzone.left{left:0}
@@ -358,7 +363,7 @@ async function writeShoppingFile(){
 function startAutoRefresh(){
   if(refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(async () => {
-    if(openRecipeId) return; // on n'écrase pas ce que l'utilisateur est en train d'éditer
+    if(openRecipeId || showImport) return; // on n'écrase pas ce que l'utilisateur est en train d'éditer/importer
     await loadAll();
     render();
   }, 5000);
@@ -827,9 +832,9 @@ async function manualRefresh(){ await loadAll(); render(); }
 
 // ---------- Importer une recette (site web / photo / PDF) ----------
 
-function openImport(){ showImport = true; importState = { method:'text', text:'', url:'', loading:false, error:'', epubCandidates:[], epubSelected:new Set() }; render(); }
+function openImport(){ showImport = true; importState = { method:'text', text:'', url:'', loading:false, error:'', epubCandidates:[], epubSelected:new Set(), pendingFile:null, pendingFileName:'' }; render(); }
 function closeImport(){ showImport = false; render(); }
-function setImportMethod(m){ importState.method = m; importState.error=''; importState.epubCandidates=[]; importState.epubSelected=new Set(); render(); }
+function setImportMethod(m){ importState.method = m; importState.error=''; importState.epubCandidates=[]; importState.epubSelected=new Set(); importState.pendingFile=null; importState.pendingFileName=''; render(); }
 
 async function fetchUrlText(url){
   try{
@@ -996,6 +1001,40 @@ async function ocrPdf(file){
   return fullText;
 }
 
+/** Zone de sélection de fichier cliquable ET glisser-déposer. Le fichier choisi est gardé
+ *  en mémoire JS (importState.pendingFile) plutôt que dans le champ HTML seul, pour ne pas
+ *  être perdu si l'écran est redessiné entre la sélection et le clic sur "Analyser". */
+function dropZoneHtml(accept, label){
+  const name = importState.pendingFileName;
+  return `
+    <div class="dropzone" id="dropzone"
+      ondragover="event.preventDefault(); event.currentTarget.classList.add('drag')"
+      ondragleave="event.currentTarget.classList.remove('drag')"
+      ondrop="handleFileDrop(event)"
+      onclick="document.getElementById('fileInput').click()">
+      <input type="file" id="fileInput" accept="${accept}" style="display:none" onchange="handleFileChange(this)">
+      ${name
+        ? `📄 <span class="filename">${escapeHtml(name)}</span><br><span style="font-size:11px">(clique ou dépose un autre fichier pour changer)</span>`
+        : `📂 ${label}<br><span style="font-size:11px">clique pour parcourir, ou glisse-dépose un fichier ici</span>`}
+    </div>`;
+}
+function handleFileChange(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  importState.pendingFile = file;
+  importState.pendingFileName = file.name;
+  render();
+}
+function handleFileDrop(event){
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag');
+  const file = event.dataTransfer.files && event.dataTransfer.files[0];
+  if(!file) return;
+  importState.pendingFile = file;
+  importState.pendingFileName = file.name;
+  render();
+}
+
 function renderImport(){
   const s = importState;
 
@@ -1031,8 +1070,8 @@ function renderImport(){
       <textarea id="importText" rows="8" style="width:100%">${escapeHtml(s.text)}</textarea>
       <button class="primary btn-full" style="margin-top:10px" onclick="runTextImport()">Extraire la recette</button>
       <div style="margin-top:14px;border-top:1px solid var(--lightgray);padding-top:14px">
-        <input type="file" id="txtFile" accept=".txt,text/plain">
-        <button class="btn-full" style="margin-top:10px" onclick="runTxtFileImport()">Analyser le fichier .txt</button>
+        ${dropZoneHtml('.txt,text/plain', 'Choisir un fichier .txt')}
+        <button class="primary btn-full" style="margin-top:10px" onclick="runTxtFileImport()" ${s.pendingFile?'':'disabled'}>Analyser le fichier .txt</button>
       </div>`;
   } else if(s.method === 'url'){
     body = `
@@ -1046,21 +1085,21 @@ function renderImport(){
       <p class="hint">Choisis une photo nette d'une page de livre ou de magazine. La reconnaissance de
       texte tourne dans le navigateur (un composant se télécharge la première fois, connexion requise
       à ce moment-là seulement).</p>
-      <input type="file" id="photoFile" accept="image/*">
-      <button class="primary btn-full" style="margin-top:10px" onclick="runPhotoImport()">Analyser la photo</button>`;
+      ${dropZoneHtml('image/*', 'Choisir une photo')}
+      <button class="primary btn-full" style="margin-top:10px" onclick="runPhotoImport()" ${s.pendingFile?'':'disabled'}>Analyser la photo</button>`;
   } else if(s.method === 'pdf'){
     body = `
       <p class="hint">Choisis un fichier PDF (recette scannée, ou livre entier avec plusieurs recettes
       à la suite). Les PDF longs peuvent prendre une bonne minute.</p>
-      <input type="file" id="pdfFile" accept="application/pdf">
-      <button class="primary btn-full" style="margin-top:10px" onclick="runPdfImport()">Analyser le PDF</button>`;
+      ${dropZoneHtml('application/pdf', 'Choisir un PDF')}
+      <button class="primary btn-full" style="margin-top:10px" onclick="runPdfImport()" ${s.pendingFile?'':'disabled'}>Analyser le PDF</button>`;
   } else if(s.method === 'epub'){
     body = `
       <p class="hint">Choisis un livre de recettes au format EPUB. L'app repère automatiquement les
       sections qui ressemblent à des recettes (ingrédients + étapes détectés) et te laisse choisir
       lesquelles importer.</p>
-      <input type="file" id="epubFile" accept=".epub,application/epub+zip">
-      <button class="primary btn-full" style="margin-top:10px" onclick="runEpubScan()">Analyser le EPUB</button>`;
+      ${dropZoneHtml('.epub,application/epub+zip', 'Choisir un EPUB')}
+      <button class="primary btn-full" style="margin-top:10px" onclick="runEpubScan()" ${s.pendingFile?'':'disabled'}>Analyser le EPUB</button>`;
   }
   return `
     <header><button onclick="closeImport()">← Retour</button></header>
@@ -1113,7 +1152,7 @@ async function extractEpubCandidates(file){
 }
 
 async function runEpubScan(){
-  const file = document.getElementById('epubFile').files[0];
+  const file = importState.pendingFile;
   if(!file) return;
   importState.loading = true; importState.error=''; render();
   const found = await extractEpubCandidates(file);
@@ -1186,7 +1225,7 @@ function scanTextForCandidates(text, sourceLabel){
 }
 
 async function runTxtFileImport(){
-  const file = document.getElementById('txtFile').files[0];
+  const file = importState.pendingFile;
   if(!file) return;
   importState.loading = true; importState.error=''; render();
   const text = await file.text();
@@ -1218,7 +1257,7 @@ async function runUrlImport(){
   await finishImport(rec);
 }
 async function runPhotoImport(){
-  const file = document.getElementById('photoFile').files[0];
+  const file = importState.pendingFile;
   if(!file) return;
   importState.loading = true; importState.error=''; render();
   const text = await ocrImage(file);
@@ -1228,7 +1267,7 @@ async function runPhotoImport(){
   await finishImport(rec);
 }
 async function runPdfImport(){
-  const file = document.getElementById('pdfFile').files[0];
+  const file = importState.pendingFile;
   if(!file) return;
   importState.loading = true; importState.error=''; render();
   const text = await ocrPdf(file);
