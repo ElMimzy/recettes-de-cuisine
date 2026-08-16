@@ -1355,10 +1355,20 @@ async function runPdfImport(){
   const file = importState.pendingFile;
   if(!file) return;
   importState.loading = true; importState.error=''; render();
-  const text = await extractPdfSmart(file);
+  let text = '';
+  let diag = '';
+  try{
+    text = await extractPdfSmart(file);
+    diag = `(${text.length} caractères extraits, ${text.split('\n').filter(l=>l.trim()).length} lignes)`;
+  }catch(e){
+    diag = `(erreur : ${e && e.message ? e.message : e})`;
+  }
   importState.loading = false;
   const found = scanTextForCandidates(text, 'pdf');
-  if(found.length === 0){ importState.error = "Le texte extrait du PDF n'est pas exploitable."; render(); return; }
+  if(found.length === 0){
+    importState.error = `Le texte extrait du PDF n'est pas exploitable. ${diag}`;
+    render(); return;
+  }
   if(found.length === 1){ await finishImport(found[0]); return; }
   importState.epubCandidates = found;
   importState.epubSelected = new Set(found.map((_,i)=>i));
