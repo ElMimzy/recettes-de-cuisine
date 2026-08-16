@@ -1046,16 +1046,20 @@ async function extractPdfTextLayer(file){
   for(let i=1;i<=pdf.numPages;i++){
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    let lastY = null, lineText = '';
+    let lineText = '';
     for(const item of content.items){
-      if(lastY !== null && Math.abs(item.transform[5] - lastY) > 2){
+      lineText += item.str;
+      // pdf.js indique lui-même les fins de ligne réelles du document — bien plus fiable
+      // qu'une estimation à partir des coordonnées verticales, qui varient trop d'un PDF à l'autre.
+      if(item.hasEOL){
         fullText += lineText.trim() + '\n';
         lineText = '';
+      } else if(item.str && !item.str.endsWith(' ')){
+        lineText += ' ';
       }
-      lineText += item.str + ' ';
-      lastY = item.transform[5];
     }
-    fullText += lineText.trim() + '\n';
+    if(lineText.trim()) fullText += lineText.trim() + '\n';
+    fullText += '\n';
   }
   return fullText.trim();
 }
