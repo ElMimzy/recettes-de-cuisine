@@ -1084,10 +1084,18 @@ async function ocrPdf(file){
 
 /** Choisit la meilleure méthode : texte intégré si disponible (rapide, fiable), sinon
  *  reconnaissance d'image en repli (PDF scanné, sans texte réel). */
+/** Certains PDF (notamment ceux générés par des services d'impression web) n'encodent
+ *  aucune vraie fin de ligne fiable : tout le texte "coule" en continu comme un article.
+ *  On repère alors directement les numéros d'étape ("1.", "2."...) dans le texte brut et on
+ *  insère un vrai saut de ligne avant chacun, pour que l'analyseur puisse ensuite les séparer. */
+function insertStepBreaks(text){
+  return text.replace(/(?:^|\s)(\d{1,2})\s*\.\s+(?=[A-ZÀ-ÖØ-Þ])/g, '\n$1. ');
+}
+
 async function extractPdfSmart(file){
   const layerText = await extractPdfTextLayer(file);
-  if(layerText && layerText.replace(/\s/g,'').length >= 40) return layerText;
-  return await ocrPdf(file);
+  if(layerText && layerText.replace(/\s/g,'').length >= 40) return insertStepBreaks(layerText);
+  return insertStepBreaks(await ocrPdf(file));
 }
 
 /** Zone de sélection de fichier cliquable ET glisser-déposer. Le fichier choisi est gardé
@@ -1439,6 +1447,16 @@ function parseCsv(text){
   return rows.filter(r => r.some(c => c.trim()));
 }
 
+/** Découpe une ligne d'ingrédients qui en contient en réalité plusieurs collés à la suite
+ *  (PDF sans vraie puce textuelle) — repère chaque nouvelle quantité ("310 g", "1 citron"...)
+ *  comme point de coupure. Si une seule quantité est trouvée, renvoie la ligne telle quelle. */
+function splitGluedIngredients(text){
+  const unit = '(?:kg|g|ml|cl|l|cc|c\\.?à\\.?s\\.?|c\\.?à\\.?c\\.?|càs|càc|gousses?|oeufs?|œufs?|jaunes?|blancs?|tasses?|verres?|tranches?|pincées?|branches?|bâtons?|feuilles?|citrons?|oignons?|gros|petit[e]?)';
+  const re = new RegExp('(?<![\\d,.])(?=\\d+(?:[.,]\\d+)?\\s*' + unit + '\\b)', 'gi');
+  const parts = text.split(re).map(p => p.trim()).filter(Boolean);
+  return parts.length > 1 ? parts : [text];
+}
+
 function parseMarkdownRecipe(fileName, raw){
   const lines = raw.replace(/\r\n/g,'\n').split('\n');
   let title='', type='', cuisson='', portions='', preparation='', source='';
@@ -1531,7 +1549,10 @@ function parseMarkdownRecipe(fileName, raw){
       if(etapeOnly.test(line)){ buf.push(line); continue; }
       continue;
     }
-    if(mode===1){ const c = clean(line.replace(/^[-*•●▪]\s*/,'')); if(c) ingredients.push(c); }
+    if(mode===1){
+      const c = clean(line.replace(/^[-*•●▪]\s*/,''));
+      if(c) splitGluedIngredients(c).forEach(part => ingredients.push(part));
+    }
     else if(mode===2){ buf.push(line); }
   }
   flush();
