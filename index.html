@@ -101,6 +101,7 @@
 </head>
 <body>
 <div id="app"></div>
+<script src="https://accounts.google.com/gsi/client"></script>
 
 <script>
 const TYPES = ["apéritif","entrée","plat","dessert","soupe","sauce","technique","autre"];
@@ -115,7 +116,7 @@ const CATEGORIES = [
   { key: "technique", label: "Techniques" }
 ];
 let currentCategory = "tous";
-let dirHandle = null;
+let connected = false;
 let recipes = [];
 let shopping = [];
 let currentTab = "list";
@@ -128,104 +129,181 @@ let refreshTimer = null;
 function uid(){ return 'r_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8); }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-// ---------- IndexedDB (mémorise le dossier choisi entre deux ouvertures) ----------
-function idbOpen(){
-  return new Promise((res, rej) => {
-    const req = indexedDB.open('recettes-fs', 1);
-    req.onupgradeneeded = () => req.result.createObjectStore('handles');
-    req.onsuccess = () => res(req.result);
-    req.onerror = () => rej(req.error);
-  });
-}
-async function idbSet(key, val){
-  const db = await idbOpen();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('handles','readwrite');
-    tx.objectStore('handles').put(val, key);
-    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
-  });
-}
-async function idbGet(key){
-  const db = await idbOpen();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('handles','readonly');
-    const req = tx.objectStore('handles').get(key);
-    req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error);
+// ---------- Connexion Google Drive ----------
+const GOOGLE_CLIENT_ID = "720418597655-m59agacf2rhhagrpcj6emcvvm4vj03bo.apps.googleusercontent.com";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
+const FOLDER_NAME = "Recettes";
+const SHOPPING_FILE = "_shopping-list.json";
+
+let accessToken = null;
+let tokenClient = null;
+let folderId = null;
+let fileIdCache = {};
+
+function initGoogle(){
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: async (resp) => {
+      if(resp && resp.access_token){
+        accessToken = resp.access_token;
+        localStorage.setItem('gdrive_signed_in', '1');
+        connected = true;
+        await loadAll();
+        startAutoRefresh();
+        render();
+      } else {
+        alert("Connexion Google échouée ou annulée.");
+        render();
+      }
+    },
+    error_callback: () => { render(); }
   });
 }
 
-// ---------- Accès au dossier ----------
-async function pickFolder(){
-  try{
-    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    await idbSet('recettesDir', dirHandle);
-    await loadAll();
-    startAutoRefresh();
-  }catch(e){ /* annulé par l'utilisateur */ }
-  render();
+function signIn(){ tokenClient.requestAccessToken({ prompt: 'consent' }); }
+
+/** Tentative de reconnexion silencieuse (sans repasser par l'écran de consentement)
+ *  si l'utilisateur s'était déjà connecté lors d'une visite précédente. */
+function trySilentSignIn(){
+  if(localStorage.getItem('gdrive_signed_in') !== '1') { render(); return; }
+  tokenClient.requestAccessToken({ prompt: '' });
 }
-async function tryReconnect(){
-  try{
-    const handle = await idbGet('recettesDir');
-    if(!handle) return false;
-    const perm = await handle.queryPermission({ mode: 'readwrite' });
-    if(perm === 'granted'){ dirHandle = handle; return true; }
-    return 'prompt';
-  }catch(e){
-    console.warn('Reconnexion automatique impossible, dossier oublié :', e);
-    try{ await idbSet('recettesDir', null); }catch(e2){}
-    return false;
+
+async function driveFetch(url, options = {}){
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...(options.headers || {}), 'Authorization': 'Bearer ' + accessToken }
+  });
+  if(res.status === 401){
+    // jeton expiré : on redemande silencieusement, puis on relance l'appel une fois
+    await new Promise((resolve) => {
+      tokenClient.callback = (resp) => { if(resp && resp.access_token) accessToken = resp.access_token; resolve(); };
+      tokenClient.requestAccessToken({ prompt: '' });
+    });
+    return fetch(url, { ...options, headers: { ...(options.headers || {}), 'Authorization': 'Bearer ' + accessToken } });
   }
+  return res;
 }
-async function reconnectClick(){
-  try{
-    const handle = await idbGet('recettesDir');
-    if(!handle){ dirHandle = null; render(); return; }
-    const perm = await handle.requestPermission({ mode: 'readwrite' });
-    if(perm === 'granted'){ dirHandle = handle; await loadAll(); startAutoRefresh(); render(); return; }
-    dirHandle = null; render();
-  }catch(e){
-    console.warn('Reconnexion impossible :', e);
-    try{ await idbSet('recettesDir', null); }catch(e2){}
-    dirHandle = null;
-    render(); // réaffiche le bouton "Choisir le dossier" — le prochain clic sera un geste utilisateur frais
+
+async function ensureFolder(){
+  if(folderId) return folderId;
+  const saved = localStorage.getItem('drive_folder_id');
+  if(saved){
+    try{
+      const check = await driveFetch(`https://www.googleapis.com/drive/v3/files/${saved}?fields=id,trashed`);
+      if(check.ok){
+        const data = await check.json();
+        if(!data.trashed){ folderId = saved; return saved; }
+      }
+    }catch(e){}
   }
+  const q = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${FOLDER_NAME}' and trashed=false`);
+  const listRes = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive`);
+  const listData = await listRes.json();
+  let id;
+  if(listData.files && listData.files.length){
+    id = listData.files[0].id;
+  } else {
+    const createRes = await driveFetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+    });
+    const createData = await createRes.json();
+    id = createData.id;
+  }
+  folderId = id;
+  localStorage.setItem('drive_folder_id', id);
+  return id;
 }
 
 async function loadAll(){
-  if(!dirHandle) return;
-  const newRecipes = [];
-  let newShopping = [];
-  for await (const [name, handle] of dirHandle.entries()){
-    if(handle.kind !== 'file' || !name.endsWith('.json')) continue;
-    try{
-      const file = await handle.getFile();
-      const text = await file.text();
-      const data = JSON.parse(text);
-      if(name === '_shopping-list.json'){ newShopping = Array.isArray(data) ? data : []; }
-      else if(data && data.id) newRecipes.push(data);
-    }catch(e){ /* fichier illisible ou en cours d'écriture par un autre appareil : ignoré ce cycle */ }
-  }
-  newRecipes.sort((a,b) => (a.title||'').toLowerCase().localeCompare((b.title||'').toLowerCase()));
-  recipes = newRecipes;
-  shopping = newShopping;
+  try{
+    const fId = await ensureFolder();
+    const q = encodeURIComponent(`'${fId}' in parents and trashed=false`);
+    const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=1000`);
+    const data = await res.json();
+    const newRecipes = [];
+    let newShopping = shopping;
+    fileIdCache = {};
+    for(const f of (data.files || [])){
+      fileIdCache[f.name] = f.id;
+      if(!f.name.endsWith('.json')) continue;
+      try{
+        const contentRes = await driveFetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
+        const text = await contentRes.text();
+        if(f.name === SHOPPING_FILE){
+          const arr = JSON.parse(text);
+          newShopping = Array.isArray(arr) ? arr : [];
+        } else {
+          const rec = JSON.parse(text);
+          if(rec && rec.id) newRecipes.push(rec);
+        }
+      }catch(e){ /* fichier illisible ce cycle : ignoré */ }
+    }
+    newRecipes.sort((a,b) => (a.title||'').toLowerCase().localeCompare((b.title||'').toLowerCase()));
+    recipes = newRecipes;
+    shopping = newShopping;
+  }catch(e){ console.warn('Échec de synchronisation Drive :', e); }
 }
 
 async function writeRecipeFile(recipe){
   recipe.updatedAt = Date.now();
-  const fh = await dirHandle.getFileHandle(recipe.id + '.json', { create: true });
-  const w = await fh.createWritable();
-  await w.write(JSON.stringify(recipe, null, 2));
-  await w.close();
+  const fId = await ensureFolder();
+  const fileName = recipe.id + '.json';
+  const content = JSON.stringify(recipe, null, 2);
+  const existingId = fileIdCache[fileName];
+  if(existingId){
+    await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: content
+    });
+  } else {
+    const boundary = '-------314159265358979323846';
+    const metadata = { name: fileName, parents: [fId] };
+    const body =
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+      `--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
+    const createRes = await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body
+    });
+    const createData = await createRes.json();
+    fileIdCache[fileName] = createData.id;
+  }
 }
 async function deleteRecipeFile(recipe){
-  try{ await dirHandle.removeEntry(recipe.id + '.json'); }catch(e){}
+  const fileName = recipe.id + '.json';
+  const id = fileIdCache[fileName];
+  if(id){ try{ await driveFetch(`https://www.googleapis.com/drive/v3/files/${id}`, { method: 'DELETE' }); }catch(e){} }
 }
 async function writeShoppingFile(){
-  const fh = await dirHandle.getFileHandle('_shopping-list.json', { create: true });
-  const w = await fh.createWritable();
-  await w.write(JSON.stringify(shopping, null, 2));
-  await w.close();
+  const fId = await ensureFolder();
+  const content = JSON.stringify(shopping, null, 2);
+  const existingId = fileIdCache[SHOPPING_FILE];
+  if(existingId){
+    await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: content
+    });
+  } else {
+    const boundary = '-------314159265358979323846';
+    const metadata = { name: SHOPPING_FILE, parents: [fId] };
+    const body =
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+      `--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
+    const createRes = await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body
+    });
+    const createData = await createRes.json();
+    fileIdCache[SHOPPING_FILE] = createData.id;
+  }
 }
 
 function startAutoRefresh(){
@@ -245,7 +323,7 @@ function render(){
   const selStart = active && typeof active.selectionStart === 'number' ? active.selectionStart : null;
   const selEnd = active && typeof active.selectionEnd === 'number' ? active.selectionEnd : null;
 
-  if(!dirHandle){
+  if(!connected){
     app.innerHTML = renderConnect();
     return;
   }
@@ -273,10 +351,10 @@ function renderConnect(){
     <div class="connect-box">
       <div class="serif" style="font-size:24px;margin-bottom:8px">Recettes</div>
       <p class="hint" style="max-width:420px;margin:0 auto 20px">
-        Choisis le dossier de recettes synchronisé par Google Drive sur ce PC.
-        L'app lira et écrira directement les fichiers à cet endroit.
+        Connecte-toi avec ton compte Google pour synchroniser tes recettes via un dossier
+        "Recettes" sur ton Google Drive.
       </p>
-      <button class="primary" onclick="pickFolder()">Choisir le dossier Google Drive</button>
+      <button class="primary" onclick="signIn()">Se connecter avec Google</button>
     </div>`;
 }
 
@@ -1191,20 +1269,9 @@ function ensureJSZip(){
 }
 
 // ---------- Démarrage ----------
-(async function init(){
-  const reconnect = await tryReconnect();
-  if(reconnect === true){ await loadAll(); startAutoRefresh(); render(); }
-  else if(reconnect === 'prompt'){
-    document.getElementById('app').innerHTML = `
-      <div class="connect-box">
-        <div class="serif" style="font-size:24px;margin-bottom:8px">Recettes</div>
-        <p class="hint">Le navigateur demande une confirmation avant de rouvrir le dossier déjà choisi.</p>
-        <button class="primary" onclick="reconnectClick()">Reconnecter au dossier Google Drive</button>
-      </div>`;
-  } else {
-    render();
-  }
-})();
+initGoogle();
+render(); // affiche l'écran de connexion pendant la tentative de reconnexion silencieuse
+trySilentSignIn();
 </script>
 </body>
 </html>
