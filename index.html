@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Recettes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11,6 +12,7 @@
     --lightgray:#e4e4e4; --offwhite:#faf9f7; --white:#ffffff; --accent:#7a5a48; --danger:#8a3a30;
   }
   *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   body{margin:0;font-family:'Inter',sans-serif;background:var(--offwhite);color:var(--black)}
   .serif{font-family:'Fraunces',serif}
   #app{max-width:1800px;margin:0 auto;padding:24px 32px 80px}
@@ -97,6 +99,26 @@
   .sidebar-item .count{font-size:11px;color:var(--midgray)}
   .sidebar-item.active .count{color:var(--lightgray)}
   .main-col{flex:1;min-width:0}
+  @media (max-width: 640px){
+    #app{padding:16px 16px 90px}
+    h1{font-size:24px}
+    body{font-size:16px}
+    button{font-size:15px;padding:11px 16px;min-height:44px}
+    .icon-btn{width:44px;height:44px;font-size:17px}
+    input[type=text],textarea,select{font-size:16px;padding:11px 14px}
+    .field-row select{padding:9px 34px 9px 16px;font-size:15px}
+    .grid{grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:12px}
+    .card .title{font-size:14px}
+    .list-item .txt{font-size:16px}
+    .step-num{font-size:16px}
+    header{flex-wrap:wrap;gap:10px}
+    .btnrow{flex-wrap:wrap}
+    .layout{flex-direction:column}
+    .sidebar{width:100%;position:static;display:flex;flex-wrap:wrap;gap:6px}
+    .sidebar-item{padding:8px 14px;margin-bottom:0}
+    .detail-top{flex-direction:column-reverse}
+    .cover{width:100%;height:auto;aspect-ratio:16/9}
+  }
 </style>
 </head>
 <body>
