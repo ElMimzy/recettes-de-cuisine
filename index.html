@@ -87,7 +87,7 @@
   .cover{width:150px;height:150px;flex-shrink:0;border-radius:14px;background:var(--lightgray);
     display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--midgray);font-size:26px;position:relative}
   .cover img{width:100%;height:100%;object-fit:cover}
-  .cover .photobtn{position:absolute;bottom:6px;right:6px;font-size:11px;padding:6px 10px}
+  .cover .photobtn{font-size:11px;padding:6px 10px}
   .btn-full{width:100%}
   .shop-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--offwhite)}
   .shop-row input[type=checkbox]{width:17px;height:17px}
@@ -144,6 +144,7 @@ const CATEGORIES = [
   { key: "technique", label: "Techniques" }
 ];
 let currentCategory = "tous";
+let imageGenLoading = false;
 let connected = false;
 let recipes = [];
 let shopping = [];
@@ -494,11 +495,48 @@ function renderShopping(){
     ${shopping.length===0 ? `<div class="empty">Liste vide.</div>` : `<div class="panel">${rows}</div>`}`;
 }
 
+/** Génère une photo de couverture à partir du titre de la recette, via un service externe
+ *  gratuit (Pollinations.ai) qui ne nécessite ni compte ni clé d'accès. Résultat variable
+ *  selon les cas, et dépend de la disponibilité de ce service tiers. */
+async function generateRecipeImage(){
+  const rec = window.__draft;
+  if(!rec.title || !rec.title.trim()){
+    alert("Ajoute d'abord un titre à la recette avant de générer une image.");
+    return;
+  }
+  imageGenLoading = true; render();
+  try{
+    const prompt = `professional food photography of ${rec.title}, appetizing plate presentation, natural lighting, restaurant quality, high detail, no text, no watermark`;
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=800&height=800&nologo=true`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('Réponse invalide du service');
+    const blob = await res.blob();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    window.__draft.imageDataUrl = dataUrl;
+  }catch(e){
+    alert("Impossible de générer une image pour le moment (service externe indisponible). Réessaie plus tard, ou ajoute une photo manuellement.");
+  }
+  imageGenLoading = false;
+  render();
+}
+
+let currentDraftRecipeId = null;
+
 function renderDetail(){
   const r = openRecipeId === 'new' ? null : recipes.find(x => x.id === openRecipeId);
-  const defaultType = (currentCategory !== 'tous') ? currentCategory : 'plat';
-  const rec = r || { id: uid(), title:'', type:defaultType, cuisson:'', portions:'', preparation:'', ingredients:[], steps:[], source:'', imageDataUrl:'', rating:0 };
-  window.__draft = rec;
+  if(currentDraftRecipeId !== openRecipeId){
+    const defaultType = (currentCategory !== 'tous') ? currentCategory : 'plat';
+    window.__draft = r
+      ? { ...r, ingredients: [...r.ingredients], steps: [...r.steps] }
+      : { id: uid(), title:'', type:defaultType, cuisson:'', portions:'', preparation:'', ingredients:[], steps:[], source:'', imageDataUrl:'', rating:0 };
+    currentDraftRecipeId = openRecipeId;
+  }
+  const rec = window.__draft;
 
   const typeChips = TYPES.map(t => `<span class="chip ${rec.type===t?'sel':''}" onclick="setDraftType('${t}')">${t}</span>`).join(' ');
   const ingRows = rec.ingredients.map((ing,i) => `
@@ -529,8 +567,11 @@ function renderDetail(){
           <div class="field-row"><label>Cuisson</label>${renderDurationField('cuisson', rec.cuisson)}</div>
         </div>
         <div class="cover">
-          ${rec.imageDataUrl ? `<img src="${rec.imageDataUrl}">` : '🍽'}
-          <button class="photobtn" onclick="document.getElementById('photoInput').click()">Changer</button>
+          ${rec.imageDataUrl ? `<img src="${rec.imageDataUrl}">` : (imageGenLoading ? '⏳' : '🍽')}
+          <div style="position:absolute;bottom:6px;right:6px;display:flex;gap:6px">
+            <button class="photobtn" onclick="generateRecipeImage()" ${imageGenLoading?'disabled':''}>${imageGenLoading?'Génération...':'Générer'}</button>
+            <button class="photobtn" onclick="document.getElementById('photoInput').click()">Changer</button>
+          </div>
           <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="pickPhoto(this.files[0])">
         </div>
       </div>
@@ -548,7 +589,7 @@ function renderDetail(){
 // ---------- Actions ----------
 function switchTab(t){ currentTab = t; render(); }
 function openRecipe(id){ openRecipeId = id === null ? 'new' : id; render(); }
-function closeDetail(){ openRecipeId = null; render(); }
+function closeDetail(){ openRecipeId = null; currentDraftRecipeId = null; render(); }
 function setDraftType(t){ window.__draft.type = t; render(); }
 
 const STAR_PATH = "M12 2l2.9 6.3 6.9.6-5.2 4.6 1.6 6.8L12 16.9 5.8 20.3l1.6-6.8L2.2 8.9l6.9-.6L12 2z";
@@ -718,16 +759,27 @@ async function saveDraft(){
   const rec = window.__draft;
   if(!rec.title.trim()) rec.title = 'Sans titre';
   await writeRecipeFile(rec);
-  await loadAll();
-  openRecipeId = null;
+  mergeRecipeLocally(rec);
+  openRecipeId = null; currentDraftRecipeId = null;
   render();
 }
+/** Met à jour la liste en mémoire sans repasser par le réseau — le fichier vient d'être
+ *  écrit sur Drive, pas besoin de tout retélécharger pour savoir ce qu'il contient. */
+function mergeRecipeLocally(rec){
+  const idx = recipes.findIndex(r => r.id === rec.id);
+  if(idx >= 0) recipes[idx] = rec; else recipes.push(rec);
+  recipes.sort((a,b) => (a.title||'').toLowerCase().localeCompare((b.title||'').toLowerCase()));
+}
+function removeRecipeLocally(id){
+  recipes = recipes.filter(r => r.id !== id);
+}
+
 async function removeRecipe(id){
   const r = recipes.find(x=>x.id===id);
   if(!r) return;
   await deleteRecipeFile(r);
-  await loadAll();
-  openRecipeId = null;
+  removeRecipeLocally(id);
+  openRecipeId = null; currentDraftRecipeId = null;
   render();
 }
 const UNIT_WORDS = ["kg","g","ml","cl","l",
@@ -983,6 +1035,31 @@ function ensurePdfJs(){
   });
   return pdfjsLoading;
 }
+/** Lit directement le texte intégré au PDF (rapide et fiable) — fonctionne pour tout PDF
+ *  qui n'est pas une simple image scannée (ex: export depuis un site web, document Word...). */
+async function extractPdfTextLayer(file){
+  const ok = await ensurePdfJs();
+  if(!ok) return '';
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+  let fullText = '';
+  for(let i=1;i<=pdf.numPages;i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    let lastY = null, lineText = '';
+    for(const item of content.items){
+      if(lastY !== null && Math.abs(item.transform[5] - lastY) > 2){
+        fullText += lineText.trim() + '\n';
+        lineText = '';
+      }
+      lineText += item.str + ' ';
+      lastY = item.transform[5];
+    }
+    fullText += lineText.trim() + '\n';
+  }
+  return fullText.trim();
+}
+
 async function ocrPdf(file){
   const ok = await ensurePdfJs();
   if(!ok) return '';
@@ -999,6 +1076,14 @@ async function ocrPdf(file){
     fullText += (await ocrImage(canvas)) + '\n';
   }
   return fullText;
+}
+
+/** Choisit la meilleure méthode : texte intégré si disponible (rapide, fiable), sinon
+ *  reconnaissance d'image en repli (PDF scanné, sans texte réel). */
+async function extractPdfSmart(file){
+  const layerText = await extractPdfTextLayer(file);
+  if(layerText && layerText.replace(/\s/g,'').length >= 40) return layerText;
+  return await ocrPdf(file);
 }
 
 /** Zone de sélection de fichier cliquable ET glisser-déposer. Le fichier choisi est gardé
@@ -1115,7 +1200,7 @@ function renderImport(){
 
 async function finishImport(rec){
   await writeRecipeFile(rec);
-  await loadAll();
+  mergeRecipeLocally(rec);
   showImport = false;
   openRecipeId = rec.id;
   render();
@@ -1175,8 +1260,8 @@ async function runEpubImport(){
   for(const rec of chosen){
     rec.id = rec.id || uid();
     await writeRecipeFile(rec);
+    mergeRecipeLocally(rec);
   }
-  await loadAll();
   showImport = false;
   render();
   alert(chosen.length + ' recette(s) importée(s).');
@@ -1270,7 +1355,7 @@ async function runPdfImport(){
   const file = importState.pendingFile;
   if(!file) return;
   importState.loading = true; importState.error=''; render();
-  const text = await ocrPdf(file);
+  const text = await extractPdfSmart(file);
   importState.loading = false;
   const found = scanTextForCandidates(text, 'pdf');
   if(found.length === 0){ importState.error = "Le texte extrait du PDF n'est pas exploitable."; render(); return; }
@@ -1343,6 +1428,7 @@ function parseCsv(text){
 function parseMarkdownRecipe(fileName, raw){
   const lines = raw.replace(/\r\n/g,'\n').split('\n');
   let title='', type='', cuisson='', portions='', preparation='', source='';
+  let fallbackTitleCandidate = '';
   const content = [];
   let insideAside=false;
   const propRe = /^-?\s*(Nombre de personnes|Portions|Type|Cuisson|Pr[eé]paration|Source)\s*:\s*(.*)$/i;
@@ -1355,6 +1441,11 @@ function parseMarkdownRecipe(fileName, raw){
       continue;
     }
     if(!title){ const h = t.match(/^#{1,6}\s*(.*)$/); if(h && h[1].trim()){ title = h[1].trim(); continue; } }
+    // Repère la 1ère ligne de contenu "normale" (courte, pas une propriété) comme titre de
+    // repli, pour les textes bruts sans balisage markdown (ex: texte extrait d'un PDF/OCR).
+    if(!fallbackTitleCandidate && t && t.length <= 120 && !propRe.test(t) && !t.startsWith('<')) {
+      fallbackTitleCandidate = t;
+    }
     const p = t.match(propRe);
     if(p){
       const key = p[1].toLowerCase(), val = p[2].trim();
@@ -1367,6 +1458,11 @@ function parseMarkdownRecipe(fileName, raw){
     }
     content.push(raw2);
   }
+  if(!title && fallbackTitleCandidate){
+    title = fallbackTitleCandidate;
+    const idx = content.findIndex(l => l.trim() === fallbackTitleCandidate);
+    if(idx !== -1) content.splice(idx, 1);
+  }
   if(!title) title = fileName.replace(/\.md$/i,'').replace(/[ _][0-9a-f]{16,}$/i,'').replace(/_/g,' ').trim();
 
   const ingKw=['ingr'], stepKw=['préparation','preparation','étape','etape','instructions','méthode','methode'];
@@ -1374,7 +1470,7 @@ function parseMarkdownRecipe(fileName, raw){
   const clean = s => s.replace(/\*\*/g,'').replace(/\*/g,'').trim();
   const marker = (s,kws) => { let c = clean(s).replace(/^[^\p{L}0-9]+/u,'').toLowerCase(); if(c.length>50) return false; return kws.some(k=>c.includes(k)); };
 
-  let mode=0; const ingredients=[]; const stepsOut=[]; let buf=[];
+  let mode=0; let hasSeenIngredients=false; const ingredients=[]; const stepsOut=[]; let buf=[];
   const tightNum = /^(\d+)[.)]\s+(.*)$/;
   const etapeOnly = /^(?:\d+[.)]\s*)?[eé]tape\s*\d*\s*:?\s*$/i;
   const etapePfx = /^[eé]tape\s*\d*\s*:?\s*/i;
@@ -1410,18 +1506,18 @@ function parseMarkdownRecipe(fileName, raw){
     const b = !h ? line.match(/^\*\*(.*)\*\*$/) : null;
     if(h||b){
       const textOnly = clean(h ? h[1] : b[1]);
-      if(marker(textOnly, ingKw)){ flush(); mode=1; continue; }
-      if(marker(textOnly, stepKw)){ flush(); mode=2; continue; }
+      if(marker(textOnly, ingKw)){ flush(); mode=1; hasSeenIngredients=true; continue; }
+      if(hasSeenIngredients && marker(textOnly, stepKw)){ flush(); mode=2; continue; }
       if(marker(textOnly, stopKw)){ flush(); mode=0; continue; }
       if(textOnly.length>15) line = textOnly; else continue;
     }
-    if(mode!==1 && marker(line, ingKw)){ flush(); mode=1; continue; }
-    if(mode!==2 && (marker(line, stepKw) || etapeOnly.test(line))){
+    if(mode!==1 && marker(line, ingKw)){ flush(); mode=1; hasSeenIngredients=true; continue; }
+    if(hasSeenIngredients && mode!==2 && (marker(line, stepKw) || etapeOnly.test(line))){
       flush(); mode=2;
       if(etapeOnly.test(line)){ buf.push(line); continue; }
       continue;
     }
-    if(mode===1){ const c = clean(line.replace(/^[-*]\s*/,'')); if(c) ingredients.push(c); }
+    if(mode===1){ const c = clean(line.replace(/^[-*•●▪]\s*/,'')); if(c) ingredients.push(c); }
     else if(mode===2){ buf.push(line); }
   }
   flush();
@@ -1490,10 +1586,10 @@ async function importNotionZip(file){
   for(const r of results){
     if(r.title && !existingTitles.has(r.title.trim().toLowerCase())){
       await writeRecipeFile(r);
+      mergeRecipeLocally(r);
       count++;
     }
   }
-  await loadAll();
   render();
   alert(count + ' recette(s) importée(s) sur ' + results.length + ' trouvée(s) dans le zip.');
 }
