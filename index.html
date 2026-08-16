@@ -1444,9 +1444,13 @@ function parseMarkdownRecipe(fileName, raw){
   const lines = raw.replace(/\r\n/g,'\n').split('\n');
   let title='', type='', cuisson='', portions='', preparation='', source='';
   let fallbackTitleCandidate = '';
+  let seenSectionMarker = false;
   const content = [];
   let insideAside=false;
-  const propRe = /^-?\s*(Nombre de personnes|Portions|Type|Cuisson|Pr[eé]paration|Source)\s*:\s*(.*)$/i;
+  const propRe = /^-?\s*(Nombre de personnes|Portions|Type|Cuisson|Pr[eé]paration|Source)\s*:\s*(\S.*)$/i;
+  const clean = s => s.replace(/\*\*/g,'').replace(/\*/g,'').trim();
+  const ingKw=['ingr'], stepKw=['préparation','preparation','étape','etape','instructions','méthode','methode'];
+  const marker = (s,kws) => { let c = clean(s).replace(/^[^\p{L}0-9]+/u,'').toLowerCase(); if(c.length>50) return false; return kws.some(k=>c.includes(k)); };
   for(const raw2 of lines){
     const t = raw2.trim();
     if(t.startsWith('<aside')) insideAside = true;
@@ -1456,11 +1460,15 @@ function parseMarkdownRecipe(fileName, raw){
       continue;
     }
     if(!title){ const h = t.match(/^#{1,6}\s*(.*)$/); if(h && h[1].trim()){ title = h[1].trim(); continue; } }
-    // Repère la 1ère ligne de contenu "normale" (courte, pas une propriété) comme titre de
-    // repli, pour les textes bruts sans balisage markdown (ex: texte extrait d'un PDF/OCR).
-    if(!fallbackTitleCandidate && t && t.length <= 120 && !propRe.test(t) && !t.startsWith('<')) {
+    // Repère la 1ère ligne de contenu "normale" (courte, pas une propriété, pas elle-même un
+    // marqueur de section) comme titre de repli, pour les textes bruts sans balisage markdown
+    // (ex: texte collé, extrait d'un PDF/OCR). On arrête d'en chercher un dès qu'on croise un
+    // vrai marqueur de section, pour ne jamais voler "Ingrédients" ou un ingrédient comme titre.
+    const looksLikeSectionMarkerHere = marker(t, ingKw) || marker(t, stepKw);
+    if(!fallbackTitleCandidate && !seenSectionMarker && t && t.length <= 120 && !propRe.test(t) && !t.startsWith('<') && !looksLikeSectionMarkerHere) {
       fallbackTitleCandidate = t;
     }
+    if(looksLikeSectionMarkerHere) seenSectionMarker = true;
     const p = t.match(propRe);
     if(p){
       const key = p[1].toLowerCase(), val = p[2].trim();
@@ -1480,10 +1488,7 @@ function parseMarkdownRecipe(fileName, raw){
   }
   if(!title) title = fileName.replace(/\.md$/i,'').replace(/[ _][0-9a-f]{16,}$/i,'').replace(/_/g,' ').trim();
 
-  const ingKw=['ingr'], stepKw=['préparation','preparation','étape','etape','instructions','méthode','methode'];
   const stopKw=['notes','variante','conservation','service','astuce','conseil','info','résumé','resume','accord','choix des fromages'];
-  const clean = s => s.replace(/\*\*/g,'').replace(/\*/g,'').trim();
-  const marker = (s,kws) => { let c = clean(s).replace(/^[^\p{L}0-9]+/u,'').toLowerCase(); if(c.length>50) return false; return kws.some(k=>c.includes(k)); };
 
   let mode=0; let hasSeenIngredients=false; const ingredients=[]; const stepsOut=[]; let buf=[];
   const tightNum = /^(\d+)[.)]\s+(.*)$/;
