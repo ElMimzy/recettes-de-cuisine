@@ -69,6 +69,13 @@
   .stars{display:inline-flex;gap:2px;vertical-align:middle}
   .dropzone{border:2px dashed var(--lightgray);border-radius:12px;padding:22px 16px;text-align:center;
     cursor:pointer;font-size:13px;color:var(--midgray);transition:border-color .15s,background .15s}
+  .progress-track{width:100%;height:6px;border-radius:999px;background:var(--lightgray);overflow:hidden;margin-top:10px}
+  .progress-fill{height:100%;border-radius:999px;background:var(--black);transition:width .2s}
+  .progress-fill.indeterminate{width:40%;animation:progress-slide 1.1s ease-in-out infinite}
+  @keyframes progress-slide{
+    0%{transform:translateX(-100%)}
+    100%{transform:translateX(250%)}
+  }
   .dropzone:hover{border-color:var(--darkgray)}
   .dropzone.drag{border-color:var(--accent);background:var(--offwhite);color:var(--black)}
   .dropzone .filename{color:var(--black);font-weight:500}
@@ -152,7 +159,7 @@ let recipes = [];
 let shopping = [];
 let currentTab = "list";
 let showImport = false;
-let importState = { method: "text", text: "", url: "", loading: false, error: "", epubCandidates: [], epubSelected: new Set() };
+let importState = { method: "text", text: "", url: "", loading: false, error: "", epubCandidates: [], epubSelected: new Set(), progressLabel: "", progressPct: null };
 let openRecipeId = null;
 let searchQuery = "";
 let refreshTimer = null;
@@ -508,7 +515,14 @@ async function generateRecipeImage(){
   }
   imageGenLoading = true; render();
   try{
-    const prompt = `professional food photography of ${rec.title}, appetizing plate presentation, natural lighting, restaurant quality, high detail, no text, no watermark`;
+    const keyIngredients = (rec.ingredients || [])
+      .slice(0, 4)
+      .map(i => i.replace(/^\d+(?:[.,]\d+)?\s*(?:g|kg|ml|cl|l|cc|c\.?à\.?s\.?|c\.?à\.?c\.?|càs|càc)?\s*/i, '').trim())
+      .filter(Boolean)
+      .join(', ');
+    const prompt = `professional food photography of "${rec.title}", a ${rec.type || 'dish'}, ` +
+      `made with ${keyIngredients || 'fresh ingredients'}, appetizing plate presentation, ` +
+      `natural lighting, shallow depth of field, restaurant quality, high detail, close-up, no text, no watermark`;
     const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=800&height=800&nologo=true`;
     const res = await fetch(url);
     if(!res.ok) throw new Error('Réponse invalide du service');
@@ -1028,6 +1042,9 @@ async function extractPdfTextLayer(file){
   const pdf = await pdfjsLib.getDocument({data: buf}).promise;
   let fullText = '';
   for(let i=1;i<=pdf.numPages;i++){
+    importState.progressLabel = `Lecture du texte — page ${i}/${pdf.numPages}`;
+    importState.progressPct = Math.round((i-1) / pdf.numPages * 100);
+    render();
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     let lineText = '';
@@ -1055,6 +1072,9 @@ async function ocrPdf(file){
   const pdf = await pdfjsLib.getDocument({data: buf}).promise;
   let fullText = '';
   for(let i=1;i<=pdf.numPages;i++){
+    importState.progressLabel = `Reconnaissance de texte (image) — page ${i}/${pdf.numPages}`;
+    importState.progressPct = Math.round((i-1) / pdf.numPages * 100);
+    render();
     const page = await pdf.getPage(i);
     const viewport = page.getViewport({scale:2});
     const canvas = document.createElement('canvas');
@@ -1189,7 +1209,12 @@ function renderImport(){
         ${chip('text','Texte')} ${chip('url','URL')} ${chip('photo','Photo')} ${chip('pdf','PDF')} ${chip('epub','EPUB')}
       </div>
       ${body}
-      ${s.loading ? `<p class="hint" style="margin-top:10px">Analyse en cours...</p>` : ''}
+      ${s.loading ? `
+        <div class="hint" style="margin-top:10px">${escapeHtml(s.progressLabel || 'Analyse en cours...')}</div>
+        <div class="progress-track">
+          <div class="progress-fill ${s.progressPct===null?'indeterminate':''}"
+            style="${s.progressPct!==null?`width:${s.progressPct}%`:''}"></div>
+        </div>` : ''}
       ${s.error ? `<p style="color:var(--danger);font-size:12px;margin-top:10px">${escapeHtml(s.error)}</p>` : ''}
     </div>`;
 }
@@ -1236,7 +1261,7 @@ async function extractEpubCandidates(file){
 async function runEpubScan(){
   const file = importState.pendingFile;
   if(!file) return;
-  importState.loading = true; importState.error=''; render();
+  importState.loading = true; importState.error=''; importState.progressLabel=''; importState.progressPct=null; render();
   const found = await extractEpubCandidates(file);
   importState.loading = false;
   if(found.length === 0){
@@ -1309,7 +1334,7 @@ function scanTextForCandidates(text, sourceLabel){
 async function runTxtFileImport(){
   const file = importState.pendingFile;
   if(!file) return;
-  importState.loading = true; importState.error=''; render();
+  importState.loading = true; importState.error=''; importState.progressLabel=''; importState.progressPct=null; render();
   const text = await file.text();
   importState.loading = false;
   const found = scanTextForCandidates(text, 'txt');
@@ -1329,7 +1354,7 @@ async function runTextImport(){
 async function runUrlImport(){
   importState.url = document.getElementById('importUrl').value.trim();
   if(!importState.url) return;
-  importState.loading = true; importState.error=''; render();
+  importState.loading = true; importState.error=''; importState.progressLabel=''; importState.progressPct=null; render();
   const rec = await importFromUrlWeb(importState.url);
   importState.loading = false;
   if(!rec){
@@ -1341,7 +1366,7 @@ async function runUrlImport(){
 async function runPhotoImport(){
   const file = importState.pendingFile;
   if(!file) return;
-  importState.loading = true; importState.error=''; render();
+  importState.loading = true; importState.error=''; importState.progressLabel=''; importState.progressPct=null; render();
   const text = await ocrImage(file);
   importState.loading = false;
   const rec = parseMarkdownRecipe('', text);
@@ -1351,7 +1376,7 @@ async function runPhotoImport(){
 async function runPdfImport(){
   const file = importState.pendingFile;
   if(!file) return;
-  importState.loading = true; importState.error=''; render();
+  importState.loading = true; importState.error=''; importState.progressLabel=''; importState.progressPct=null; render();
   let text = '';
   let diag = '';
   try{
@@ -1452,7 +1477,18 @@ function parseMarkdownRecipe(fileName, raw){
   const propRe = /^-?\s*(Nombre de personnes|Portions|Type|Cuisson|Pr[eé]paration|Source)\s*:\s*(\S.*)$/i;
   const clean = s => s.replace(/\*\*/g,'').replace(/\*/g,'').trim();
   const ingKw=['ingr'], stepKw=['préparation','preparation','étape','etape','instructions','méthode','methode'];
-  const marker = (s,kws) => { let c = clean(s).replace(/^[^\p{L}0-9]+/u,'').toLowerCase(); if(c.length>50) return false; return kws.some(k=>c.includes(k)); };
+  const marker = (s,kws) => {
+    let c = clean(s).replace(/^[^\p{L}0-9]+/u,'').toLowerCase();
+    if(c.length>50) return false;
+    for(const k of kws){
+      if(!c.includes(k)) continue;
+      // "Préparation de/des/du X" est un sous-titre (encore des ingrédients), pas la vraie
+      // section des étapes — seul "Préparation" seul (éventuellement suivi de ":") compte.
+      if((k==='préparation'||k==='preparation') && /pr[eé]paration\s+(de|des|du|d['’]|et)\b/.test(c)) continue;
+      return true;
+    }
+    return false;
+  };
   for(const raw2 of lines){
     const t = raw2.trim();
     if(t.startsWith('<aside')) insideAside = true;
