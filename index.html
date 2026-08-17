@@ -1047,19 +1047,27 @@ async function extractPdfTextLayer(file){
     render();
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    let lineText = '';
-    for(const item of content.items){
-      lineText += item.str;
-      // pdf.js indique lui-même les fins de ligne réelles du document — bien plus fiable
-      // qu'une estimation à partir des coordonnées verticales, qui varient trop d'un PDF à l'autre.
-      if(item.hasEOL){
-        fullText += lineText.trim() + '\n';
-        lineText = '';
-      } else if(item.str && !item.str.endsWith(' ')){
-        lineText += ' ';
-      }
+
+    // Reconstruit l'ordre de lecture RÉEL (haut en bas, gauche à droite) à partir de la
+    // position de chaque bloc de texte sur la page, plutôt que de faire confiance à l'ordre
+    // du flux interne du PDF — qui ne correspond pas toujours à l'ordre visuel, en particulier
+    // pour les mises en page complexes (colonnes, blocs positionnés indépendamment...).
+    const items = content.items
+      .filter(it => it.str !== undefined)
+      .map(it => ({ str: it.str, x: it.transform[4], y: it.transform[5] }));
+
+    const rows = [];
+    for(const it of items){
+      let row = rows.find(r => Math.abs(r.y - it.y) <= 3); // tolérance ~3pt pour une même ligne visuelle
+      if(!row){ row = { y: it.y, items: [] }; rows.push(row); }
+      row.items.push(it);
     }
-    if(lineText.trim()) fullText += lineText.trim() + '\n';
+    rows.sort((a, b) => b.y - a.y); // Y décroissant = du haut vers le bas de la page
+    for(const row of rows){
+      row.items.sort((a, b) => a.x - b.x); // gauche à droite au sein d'une même ligne
+      const lineText = row.items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
+      if(lineText) fullText += lineText + '\n';
+    }
     fullText += '\n';
   }
   return fullText.trim();
@@ -1094,12 +1102,6 @@ async function ocrPdf(file){
  *  insère un vrai saut de ligne avant chacun, pour que l'analyseur puisse ensuite les séparer. */
 function insertStepBreaks(text){
   return text.replace(/(?:^|\s)(\d{1,2})\s*\.\s+(?=[A-ZÀ-ÖØ-Þ])/g, '\n$1. ');
-}
-
-async function extractPdfSmart(file){
-  const layerText = await extractPdfTextLayer(file);
-  if(layerText && layerText.replace(/\s/g,'').length >= 40) return insertStepBreaks(layerText);
-  return insertStepBreaks(await ocrPdf(file));
 }
 
 /** Zone de sélection de fichier cliquable ET glisser-déposer. Le fichier choisi est gardé
@@ -1225,8 +1227,20 @@ async function extractFromFile(file, name){
     return (rec && rec.title) ? [rec] : [];
   }
   if(type === 'application/pdf' || lower.endsWith('.pdf')){
-    const text = await extractPdfSmart(file);
-    return scanTextForCandidates(text, 'pdf');
+    const layerText = await extractPdfTextLayer(file);
+    let found = [];
+    if(layerText && layerText.replace(/\s/g,'').length >= 40){
+      found = scanTextForCandidates(insertStepBreaks(layerText), 'pdf');
+    }
+    if(found.length === 0){
+      // Le texte intégré n'a rien donné d'exploitable : nouvel essai par reconnaissance
+      // d'image, qui fait sa propre analyse de mise en page indépendante (filet de sécurité).
+      importState.progressLabel = "Nouvel essai par reconnaissance d'image...";
+      render();
+      const ocrText = await ocrPdf(file);
+      found = scanTextForCandidates(insertStepBreaks(ocrText), 'pdf');
+    }
+    return found;
   }
   if(type.includes('epub') || lower.endsWith('.epub')){
     return await extractEpubCandidates(file);
