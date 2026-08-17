@@ -882,9 +882,9 @@ async function manualRefresh(){ await loadAll(); render(); }
 
 // ---------- Importer une recette (site web / photo / PDF) ----------
 
-function openImport(){ showImport = true; importState = { method:'text', text:'', url:'', loading:false, error:'', epubCandidates:[], epubSelected:new Set(), pendingFile:null, pendingFileName:'' }; render(); }
+function openImport(){ showImport = true; importState = { text:'', loading:false, error:'', epubCandidates:[], epubSelected:new Set(), pendingFile:null, pendingFileName:'', progressLabel:'', progressPct:null }; render(); }
 function closeImport(){ showImport = false; render(); }
-function setImportMethod(m){ importState.method = m; importState.error=''; importState.epubCandidates=[]; importState.epubSelected=new Set(); importState.pendingFile=null; importState.pendingFileName=''; render(); }
+
 
 async function fetchUrlText(url){
   try{
@@ -1139,8 +1139,7 @@ function handleFileDrop(event){
 function renderImport(){
   const s = importState;
 
-  // Écran de sélection multi-recettes, partagé entre EPUB, PDF et TXT dès que plusieurs
-  // recettes sont détectées dans un même document.
+  // Écran de sélection multi-recettes, partagé pour tout document contenant plusieurs recettes.
   if(s.epubCandidates.length > 0){
     const rows = s.epubCandidates.map((r, i) => `
       <label style="display:flex;align-items:center;gap:10px;padding:6px 0;cursor:pointer">
@@ -1162,53 +1161,18 @@ function renderImport(){
       </div>`;
   }
 
-  const chip = (key,label) => `<span class="chip ${s.method===key?'sel':''}" onclick="setImportMethod('${key}')">${label}</span>`;
-  let body = '';
-  if(s.method === 'text'){
-    body = `
-      <p class="hint">Colle le texte de la recette (copié depuis un site, un livre, etc.), ou choisis
-      directement un fichier .txt (qui peut contenir plusieurs recettes à la suite).</p>
-      <textarea id="importText" rows="8" style="width:100%">${escapeHtml(s.text)}</textarea>
-      <button class="primary btn-full" style="margin-top:10px" onclick="runTextImport()">Extraire la recette</button>
-      <div style="margin-top:14px;border-top:1px solid var(--lightgray);padding-top:14px">
-        ${dropZoneHtml('.txt,text/plain', 'Choisir un fichier .txt')}
-        <button class="primary btn-full" style="margin-top:10px" onclick="runTxtFileImport()" ${s.pendingFile?'':'disabled'}>Analyser le fichier .txt</button>
-      </div>`;
-  } else if(s.method === 'url'){
-    body = `
-      <p class="hint">Colle le lien d'une page de recette. Fonctionne bien sur les sites qui exposent
-      des données structurées ; certains sites bloquent l'accès direct depuis un navigateur (message
-      d'erreur dans ce cas — utilise plutôt l'onglet "Texte" en copiant-collant la page).</p>
-      <input type="text" id="importUrl" placeholder="https://..." value="${escapeHtml(s.url)}">
-      <button class="primary btn-full" style="margin-top:10px" onclick="runUrlImport()">Importer depuis cette page</button>`;
-  } else if(s.method === 'photo'){
-    body = `
-      <p class="hint">Choisis une photo nette d'une page de livre ou de magazine. La reconnaissance de
-      texte tourne dans le navigateur (un composant se télécharge la première fois, connexion requise
-      à ce moment-là seulement).</p>
-      ${dropZoneHtml('image/*', 'Choisir une photo')}
-      <button class="primary btn-full" style="margin-top:10px" onclick="runPhotoImport()" ${s.pendingFile?'':'disabled'}>Analyser la photo</button>`;
-  } else if(s.method === 'pdf'){
-    body = `
-      <p class="hint">Choisis un fichier PDF (recette scannée, ou livre entier avec plusieurs recettes
-      à la suite). Les PDF longs peuvent prendre une bonne minute.</p>
-      ${dropZoneHtml('application/pdf', 'Choisir un PDF')}
-      <button class="primary btn-full" style="margin-top:10px" onclick="runPdfImport()" ${s.pendingFile?'':'disabled'}>Analyser le PDF</button>`;
-  } else if(s.method === 'epub'){
-    body = `
-      <p class="hint">Choisis un livre de recettes au format EPUB. L'app repère automatiquement les
-      sections qui ressemblent à des recettes (ingrédients + étapes détectés) et te laisse choisir
-      lesquelles importer.</p>
-      ${dropZoneHtml('.epub,application/epub+zip', 'Choisir un EPUB')}
-      <button class="primary btn-full" style="margin-top:10px" onclick="runEpubScan()" ${s.pendingFile?'':'disabled'}>Analyser le EPUB</button>`;
-  }
   return `
     <header><button onclick="closeImport()">← Retour</button></header>
     <div class="panel" style="max-width:520px;margin:0 auto">
-      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-        ${chip('text','Texte')} ${chip('url','URL')} ${chip('photo','Photo')} ${chip('pdf','PDF')} ${chip('epub','EPUB')}
+      <p class="hint">Colle le texte d'une recette, ou le lien d'une page web — ou choisis
+      directement un fichier ci-dessous (photo, PDF, EPUB ou .txt). L'app détecte elle-même
+      le type de contenu.</p>
+      <textarea id="importText" rows="6" style="width:100%" placeholder="Texte ou lien (https://...)"
+        oninput="importState.text=this.value; if(importState.pendingFile){importState.pendingFile=null; importState.pendingFileName=''; render();}">${escapeHtml(s.text)}</textarea>
+      <div style="margin-top:10px">
+        ${dropZoneHtml('image/*,application/pdf,.epub,application/epub+zip,.txt,text/plain', 'Choisir un fichier (photo, PDF, EPUB, .txt)')}
       </div>
-      ${body}
+      <button class="primary btn-full" style="margin-top:10px" onclick="runImport()" ${(!s.text.trim() && !s.pendingFile)?'disabled':''}>Importer</button>
       ${s.loading ? `
         <div class="hint" style="margin-top:10px">${escapeHtml(s.progressLabel || 'Analyse en cours...')}</div>
         <div class="progress-track">
@@ -1217,6 +1181,59 @@ function renderImport(){
         </div>` : ''}
       ${s.error ? `<p style="color:var(--danger);font-size:12px;margin-top:10px">${escapeHtml(s.error)}</p>` : ''}
     </div>`;
+}
+
+/** Détecte automatiquement quoi faire : fichier choisi (photo/PDF/EPUB/.txt selon son type),
+ *  sinon lien web si le texte collé est une URL seule, sinon texte brut à analyser directement. */
+async function runImport(){
+  const s = importState;
+  importState.loading = true; importState.error=''; importState.progressLabel=''; importState.progressPct=null; render();
+  let candidates = [];
+  try{
+    if(s.pendingFile){
+      candidates = await extractFromFile(s.pendingFile, s.pendingFileName);
+    } else {
+      const trimmed = s.text.trim();
+      if(/^https?:\/\/\S+$/.test(trimmed)){
+        const rec = await importFromUrlWeb(trimmed);
+        candidates = rec ? [rec] : [];
+      } else {
+        candidates = scanTextForCandidates(trimmed, 'texte');
+      }
+    }
+  }catch(e){
+    importState.error = "Échec de l'import : " + (e && e.message ? e.message : e);
+  }
+  importState.loading = false; importState.progressLabel=''; importState.progressPct=null;
+  if(candidates.length === 0){
+    if(!importState.error) importState.error = "Impossible d'en extraire une recette exploitable. Vérifie le contenu et réessaie.";
+    render(); return;
+  }
+  if(candidates.length === 1){ await finishImport(candidates[0]); return; }
+  importState.epubCandidates = candidates;
+  importState.epubSelected = new Set(candidates.map((_,i)=>i));
+  render();
+}
+
+/** Route vers la bonne méthode d'extraction selon le type du fichier choisi. */
+async function extractFromFile(file, name){
+  const lower = (name||file.name||'').toLowerCase();
+  const type = file.type || '';
+  if(type.startsWith('image/') || /\.(jpe?g|png|webp|heic|bmp)$/i.test(lower)){
+    const text = await ocrImage(file);
+    const rec = parseMarkdownRecipe('photo', text);
+    return (rec && rec.title) ? [rec] : [];
+  }
+  if(type === 'application/pdf' || lower.endsWith('.pdf')){
+    const text = await extractPdfSmart(file);
+    return scanTextForCandidates(text, 'pdf');
+  }
+  if(type.includes('epub') || lower.endsWith('.epub')){
+    return await extractEpubCandidates(file);
+  }
+  // .txt ou tout autre fichier texte
+  const text = await file.text();
+  return scanTextForCandidates(text, 'txt');
 }
 
 async function finishImport(rec){
@@ -1258,20 +1275,6 @@ async function extractEpubCandidates(file){
   return candidates;
 }
 
-async function runEpubScan(){
-  const file = importState.pendingFile;
-  if(!file) return;
-  importState.loading = true; importState.error=''; importState.progressLabel=''; importState.progressPct=null; render();
-  const found = await extractEpubCandidates(file);
-  importState.loading = false;
-  if(found.length === 0){
-    importState.error = "Aucune recette détectée dans ce fichier (pas de section avec ingrédients + étapes reconnaissables).";
-  } else {
-    importState.epubCandidates = found;
-    importState.epubSelected = new Set(found.map((_, i) => i)); // tout coché par défaut
-  }
-  render();
-}
 function toggleEpubCandidate(i){
   if(importState.epubSelected.has(i)) importState.epubSelected.delete(i);
   else importState.epubSelected.add(i);
@@ -1329,72 +1332,6 @@ function scanTextForCandidates(text, sourceLabel){
     if(rec && rec.title && rec.ingredients.length && rec.steps.length) results.push(rec);
   });
   return results;
-}
-
-async function runTxtFileImport(){
-  const file = importState.pendingFile;
-  if(!file) return;
-  importState.loading = true; importState.error=''; importState.progressLabel=''; importState.progressPct=null; render();
-  const text = await file.text();
-  importState.loading = false;
-  const found = scanTextForCandidates(text, 'txt');
-  if(found.length === 0){ importState.error = "Impossible d'extraire une recette de ce fichier."; render(); return; }
-  if(found.length === 1){ await finishImport(found[0]); return; }
-  importState.epubCandidates = found;
-  importState.epubSelected = new Set(found.map((_,i)=>i));
-  render();
-}
-
-async function runTextImport(){
-  importState.text = document.getElementById('importText').value;
-  const rec = parseMarkdownRecipe('', importState.text);
-  if(!rec || !rec.title){ importState.error = "Impossible d'extraire une recette de ce texte."; render(); return; }
-  await finishImport(rec);
-}
-async function runUrlImport(){
-  importState.url = document.getElementById('importUrl').value.trim();
-  if(!importState.url) return;
-  importState.loading = true; importState.error=''; importState.progressLabel=''; importState.progressPct=null; render();
-  const rec = await importFromUrlWeb(importState.url);
-  importState.loading = false;
-  if(!rec){
-    importState.error = "Impossible de lire cette page (souvent bloqué par le site pour des raisons de sécurité du navigateur). Copie le texte de la page et utilise plutôt l'onglet Texte.";
-    render(); return;
-  }
-  await finishImport(rec);
-}
-async function runPhotoImport(){
-  const file = importState.pendingFile;
-  if(!file) return;
-  importState.loading = true; importState.error=''; importState.progressLabel=''; importState.progressPct=null; render();
-  const text = await ocrImage(file);
-  importState.loading = false;
-  const rec = parseMarkdownRecipe('', text);
-  if(!rec || !rec.title){ importState.error = "Le texte extrait de la photo n'est pas exploitable. Réessaie avec une photo plus nette."; render(); return; }
-  await finishImport(rec);
-}
-async function runPdfImport(){
-  const file = importState.pendingFile;
-  if(!file) return;
-  importState.loading = true; importState.error=''; importState.progressLabel=''; importState.progressPct=null; render();
-  let text = '';
-  let diag = '';
-  try{
-    text = await extractPdfSmart(file);
-    diag = `(${text.length} caractères extraits, ${text.split('\n').filter(l=>l.trim()).length} lignes)`;
-  }catch(e){
-    diag = `(erreur : ${e && e.message ? e.message : e})`;
-  }
-  importState.loading = false;
-  const found = scanTextForCandidates(text, 'pdf');
-  if(found.length === 0){
-    importState.error = `Le texte extrait du PDF n'est pas exploitable. ${diag}`;
-    render(); return;
-  }
-  if(found.length === 1){ await finishImport(found[0]); return; }
-  importState.epubCandidates = found;
-  importState.epubSelected = new Set(found.map((_,i)=>i));
-  render();
 }
 
 // ---------- Export / Import compatible Notion ----------
@@ -1477,11 +1414,16 @@ function parseMarkdownRecipe(fileName, raw){
   const propRe = /^-?\s*(Nombre de personnes|Portions|Type|Cuisson|Pr[eé]paration|Source)\s*:\s*(\S.*)$/i;
   const clean = s => s.replace(/\*\*/g,'').replace(/\*/g,'').trim();
   const ingKw=['ingr'], stepKw=['préparation','preparation','étape','etape','instructions','méthode','methode'];
-  const marker = (s,kws) => {
+  const marker = (s,kws,strictStart) => {
     let c = clean(s).replace(/^[^\p{L}0-9]+/u,'').toLowerCase();
     if(c.length>50) return false;
     for(const k of kws){
-      if(!c.includes(k)) continue;
+      const idx = c.indexOf(k);
+      if(idx===-1) continue;
+      // Sur une ligne brute (pas un vrai titre balisé), le mot-clé doit être en tout début —
+      // évite qu'une phrase d'étape mentionnant "ingrédients" au milieu ("Ajouter tous les
+      // ingrédients...") ne soit confondue avec un nouveau titre de section.
+      if(strictStart && idx>3) continue;
       // "Préparation de/des/du X" est un sous-titre (encore des ingrédients), pas la vraie
       // section des étapes — seul "Préparation" seul (éventuellement suivi de ":") compte.
       if((k==='préparation'||k==='preparation') && /pr[eé]paration\s+(de|des|du|d['’]|et)\b/.test(c)) continue;
@@ -1489,6 +1431,8 @@ function parseMarkdownRecipe(fileName, raw){
     }
     return false;
   };
+  const UNIT_RE = /^\d+(?:[.,]\d+)?\s*(oz|kg|g|ml|cl|l|cc|c\.?à\.?s\.?|c\.?à\.?c\.?|càs|càc|gousses?|oeufs?|œufs?|jaunes?|tasses?|verres?|tranches?|pincées?)\b/i;
+  const looksLikeIngredientQtyLine = s => UNIT_RE.test(s.trim());
   for(const raw2 of lines){
     const t = raw2.trim();
     if(t.startsWith('<aside')) insideAside = true;
@@ -1569,10 +1513,18 @@ function parseMarkdownRecipe(fileName, raw){
       if(marker(textOnly, stopKw)){ flush(); mode=0; continue; }
       if(textOnly.length>15) line = textOnly; else continue;
     }
-    if(mode!==1 && marker(line, ingKw)){ flush(); mode=1; hasSeenIngredients=true; continue; }
-    if(hasSeenIngredients && mode!==2 && (marker(line, stepKw) || etapeOnly.test(line))){
+    if(mode!==1 && marker(line, ingKw, true)){ flush(); mode=1; hasSeenIngredients=true; continue; }
+    if(hasSeenIngredients && mode!==2 && (marker(line, stepKw, true) || etapeOnly.test(line))){
       flush(); mode=2;
       if(etapeOnly.test(line)){ buf.push(line); continue; }
+      continue;
+    }
+    // Une ligne qui "ressemble" clairement à un ingrédient (quantité + unité en tête) est
+    // toujours traitée comme telle, même en mode étapes — récupère les ingrédients qui
+    // apparaissent après les étapes dans le texte extrait (mise en page en colonnes).
+    if(mode!==0 && looksLikeIngredientQtyLine(line)){
+      const c = clean(line.replace(/^[-*•●▪]\s*/,''));
+      if(c) splitGluedIngredients(c).forEach(part => ingredients.push(part));
       continue;
     }
     if(mode===1){
